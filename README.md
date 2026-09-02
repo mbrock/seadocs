@@ -11,9 +11,10 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-Setup and the generated board share one page. The header bar holds undo / redo
-and save / open / new, and shows a problem count linking to the board when it
-has one.
+Setup and the generated board share one page. The header bar holds undo / redo,
+save / open / new, and the sample loader, and shows a problem count linking to
+the board when it has one. With no saved browser state, the sample day is loaded
+automatically.
 
 - **Setup** — one editable matrix: film teams are rows, decision makers are
   columns, and every cell contains both sides' requests. Editing a row or column
@@ -23,11 +24,10 @@ has one.
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
   Evening — the way a crew refers to films it knows by heart; write
   `Title = Code` or `Name = Code` to choose the short form yourself; a
-  trailing `*` marks someone who joins online), name the event (printed on
-  every running order), and list the slots, one line per slot — usually the
-  times. Pasting adds entries and never silently replaces existing people;
-  destructive deletions require confirmation when edits are applied. The sample
-  loader fills in the BSD 2026 day. Unapplied text stays intact while moving around the app.
+  trailing `*` marks someone who joins online). Pasting adds entries and never
+  silently replaces existing people; destructive deletions require confirmation
+  when edits are applied. Meeting times come from the loaded project and are not
+  currently editable in the UI.
   Every matrix cell has two checkboxes, gold for the decision maker and blue for the
   team. Not asked is not a refusal; it only means nobody asked. Decision-maker
   interest is the primary signal; team interest is
@@ -142,9 +142,9 @@ index.html                 Vite entry
 src/main.tsx               mounts <App/>
 src/index.css              Tailwind + Public Sans import and the colour/font theme
 src/App.tsx                page layout, project history (undo/redo), localStorage autosave
-src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, AskPair, ask tints
-src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
-src/components/SetupPanel.tsx    editable participant/request matrix, day settings and sample loader
+src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Name, AskPair
+src/components/Toolbar.tsx       clashes, undo / redo, save / open / new / sample (in the header)
+src/components/SetupPanel.tsx    editable participant/request matrix
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { emptyProject, type Project } from './lib/project'
+import type { Project } from './lib/project'
 import { loadLocal, saveLocal } from './lib/persist'
 import { commit, initialHistory, redo, undo } from './lib/history'
 import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
 import { BoardPanel } from './components/BoardPanel'
+import { sampleProject } from './lib/sample'
 
 export default function App() {
-  const [history, setHistory] = useState(() => initialHistory(loadLocal() ?? emptyProject()))
+  const [history, setHistory] = useState(() => initialHistory(loadLocal() ?? sampleProject()))
   const project = history.present
   const setProject: Dispatch<SetStateAction<Project>> = useCallback(
     (action) => setHistory((h) => commit(h, typeof action === 'function' ? action(h.present) : action)),

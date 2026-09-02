@@ -1,23 +1,20 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { asked, type Id } from '../lib/scheduler'
-import { sampleProject } from '../lib/sample'
 import { countryCode, parseName, surname } from '../lib/names'
 import {
-  parseLines,
   parseRoster,
   reconcileParticipants,
   rosterText,
-  slotLabel,
   withAsk,
   withAsks,
   withParticipants,
-  withSlots,
-  withTitle,
   type AskKind,
   type Project,
   type RosterEntry,
 } from '../lib/project'
-import { Button, Label, inputClass, textareaClass } from './ui'
+import { Button } from './ui'
+
+const textareaClass = 'w-full resize-y rounded-[3px] border border-rule bg-paper px-2 py-1 text-[0.85rem] leading-[1.5] focus:border-ink focus:outline-none'
 
 interface Props {
   project: Project
@@ -25,10 +22,8 @@ interface Props {
 }
 
 interface Drafts {
-  title: string
   teams: RosterRow[]
   dms: RosterRow[]
-  slotsText: string
 }
 
 interface RosterRow {
@@ -45,34 +40,29 @@ const entryText = (entry: RosterEntry) => `${entry.name}${entry.code ? ` = ${ent
 
 function draftsFrom(project: Project): Drafts {
   return {
-    title: project.title,
     teams: rowsFrom(project.teams),
     dms: rowsFrom(project.dms),
-    slotsText: project.slots.map((slot) => slotLabel(project, slot.id)).join('\n'),
   }
 }
 
 const same = (a: Drafts, b: Drafts) =>
-  a.title === b.title && a.slotsText === b.slotsText &&
   (['teams', 'dms'] as const).every((side) =>
     a[side].length === b[side].length && a[side].every((item, index) => item.id === b[side][index].id && item.text === b[side][index].text),
   )
 
-/** One editable matrix for participants and both sides' requests, with day settings alongside it. */
+/** One editable matrix for participants and both sides' requests. */
 export function SetupPanel({ project, onChange }: Props) {
   const [drafts, setDrafts] = useState(() => draftsFrom(project))
-  const [source, setSource] = useState(() => ({ teams: project.teams, dms: project.dms, slots: project.slots, title: project.title }))
+  const [source, setSource] = useState(() => ({ teams: project.teams, dms: project.dms }))
   const [paste, setPaste] = useState({ team: '', dm: '' })
   const [pasteNote, setPasteNote] = useState({ team: '', dm: '' })
-  const sourceChanged = source.teams !== project.teams || source.dms !== project.dms || source.slots !== project.slots || source.title !== project.title
+  const sourceChanged = source.teams !== project.teams || source.dms !== project.dms
   const wasDirty = !same(drafts, {
-    title: source.title,
     teams: rowsFrom(source.teams),
     dms: rowsFrom(source.dms),
-    slotsText: source.slots.map((slot, index) => slot.label || `Slot ${index + 1}`).join('\n'),
   })
   if (sourceChanged && !wasDirty) {
-    setSource({ teams: project.teams, dms: project.dms, slots: project.slots, title: project.title })
+    setSource({ teams: project.teams, dms: project.dms })
     setDrafts(draftsFrom(project))
   }
 
@@ -83,15 +73,12 @@ export function SetupPanel({ project, onChange }: Props) {
   const duplicateNames = [...duplicates(teamEntries), ...duplicates(dmEntries)]
   const reconciliation = reconcileParticipants(project, teamEntries, dmEntries, true)
   const blocked = duplicateNames.length > 0 || reconciliation.ambiguous.length > 0
-  const slotCount = parseLines(drafts.slotsText).length
-  const removedSlots = Math.max(0, project.slots.length - Math.max(1, slotCount))
-  const removedSlotIds = new Set(project.slots.slice(project.slots.length - removedSlots).map((slot) => slot.id))
   const removedParticipantIds = new Set(reconciliation.changes.filter((change) => change.kind === 'deleted').map((change) => change.id))
   const removedMeetings = project.meetings.filter(
-    (meeting) => removedSlotIds.has(meeting.slot) || removedParticipantIds.has(meeting.team) || removedParticipantIds.has(meeting.dm),
+    (meeting) => removedParticipantIds.has(meeting.team) || removedParticipantIds.has(meeting.dm),
   ).length
   const removedAvailability = [...project.teams, ...project.dms].reduce(
-    (count, person) => count + (person.unavailable ?? []).filter((slot) => removedParticipantIds.has(person.id) || removedSlotIds.has(slot)).length,
+    (count, person) => count + (removedParticipantIds.has(person.id) ? (person.unavailable?.length ?? 0) : 0),
     0,
   )
 
@@ -99,17 +86,15 @@ export function SetupPanel({ project, onChange }: Props) {
     if (blocked) return
     const removed = reconciliation.removed
     if (
-      (removed.participants > 0 || removedSlots > 0) &&
+      removed.participants > 0 &&
       !confirm(
-        `Apply these deletions?\n\n${removed.participants} participant(s), ${removedSlots} slot(s)\n` +
+        `Apply these deletions?\n\n${removed.participants} participant(s)\n` +
           `${removed.dmAsks + removed.teamAsks} request(s), ${removedMeetings} meeting(s), and ${removedAvailability} availability mark(s) will be removed.\n\nYou can Undo after applying.`,
       )
     ) return
-    let next = withParticipants(project, teamEntries, dmEntries, true)
-    next = withSlots(next, parseLines(drafts.slotsText).map((label, index) => (label === `Slot ${index + 1}` ? '' : label)))
-    next = withTitle(next, drafts.title)
+    const next = withParticipants(project, teamEntries, dmEntries, true)
     onChange(next)
-    setSource({ teams: next.teams, dms: next.dms, slots: next.slots, title: next.title })
+    setSource({ teams: next.teams, dms: next.dms })
     setDrafts(draftsFrom(next))
   }
 
@@ -130,32 +115,23 @@ export function SetupPanel({ project, onChange }: Props) {
     }))
   }
 
-  function loadSample() {
-    const hasWork = project.teams.length > 0 || project.dms.length > 0 || Object.keys(project.dmAsks).length > 0 || Object.keys(project.teamAsks).length > 0
-    if (hasWork && !confirm('Replace the current project with the sample? You can Undo afterwards.')) return
-    const next = sampleProject()
-    onChange(next)
-    setSource({ teams: next.teams, dms: next.dms, slots: next.slots, title: next.title })
-    setDrafts(draftsFrom(next))
-  }
-
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-      <section className="min-w-0">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-3 text-[0.75rem] text-muted">
-            <span><span className="mr-1 inline-block h-3 w-3 rounded-[2px] border border-gold-3 bg-gold-2 align-[-1px]" />DM request</span>
-            <span><span className="mr-1 inline-block h-3 w-3 rounded-[2px] border border-sea-3 bg-sea-2 align-[-1px]" />team request</span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="quiet" onClick={() => edit({ dms: [...drafts.dms, row()] })}>+ DM</Button>
-            <Button variant="quiet" onClick={() => confirm('Clear all decision maker requests?') && onChange(withAsks(project, {}, project.teamAsks))}>Clear DM requests</Button>
-            <Button variant="quiet" onClick={() => confirm('Clear all team requests?') && onChange(withAsks(project, project.dmAsks, {}))}>Clear team requests</Button>
-          </div>
+    <section className="min-w-0">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-3 text-[0.75rem] text-muted">
+          <span><span className="mr-1 inline-block h-3 w-3 rounded-[2px] border border-gold-3 bg-gold-2 align-[-1px]" />DM request</span>
+          <span><span className="mr-1 inline-block h-3 w-3 rounded-[2px] border border-sea-3 bg-sea-2 align-[-1px]" />team request</span>
         </div>
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+          <Button variant="quiet" onClick={() => edit({ dms: [...drafts.dms, row()] })}>+ DM</Button>
+          <Button variant="primary" onClick={apply} disabled={!dirty || blocked}>Apply edits</Button>
+          <Button variant="quiet" onClick={() => confirm('Clear all decision maker requests?') && onChange(withAsks(project, {}, project.teamAsks))}>Clear DM requests</Button>
+          <Button variant="quiet" onClick={() => confirm('Clear all team requests?') && onChange(withAsks(project, project.dmAsks, {}))}>Clear team requests</Button>
+        </div>
+      </div>
 
-        <div className="max-h-[calc(100vh-7rem)] overflow-auto pb-3">
-          <table className="mr-16 w-max border-separate border-spacing-0 text-[0.8rem]">
+      <div className="max-h-[calc(100vh-7rem)] overflow-auto pb-3">
+        <table className="mr-16 w-max border-separate border-spacing-0 text-[0.8rem]">
             <thead className="sticky top-0 z-20 bg-paper">
               <tr>
                 <th className="sticky left-0 z-30 h-20 w-52 max-w-52 border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold">Team</th>
@@ -206,39 +182,22 @@ export function SetupPanel({ project, onChange }: Props) {
                 <td colSpan={Math.max(1, drafts.dms.length)} />
               </tr>
             </tbody>
-          </table>
-        </div>
+        </table>
+      </div>
 
-        <details className="mt-3 border-t border-rule pt-3">
-          <summary className="cursor-pointer text-[0.82rem] font-semibold text-muted">Paste names</summary>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <PasteNames label="film teams" value={paste.team} note={pasteNote.team} onChange={(text) => setPaste((current) => ({ ...current, team: text }))} onAdd={() => addPasted('team')} />
-            <PasteNames label="decision makers" value={paste.dm} note={pasteNote.dm} onChange={(text) => setPaste((current) => ({ ...current, dm: text }))} onAdd={() => addPasted('dm')} />
-          </div>
-        </details>
-      </section>
-
-      <aside className="flex flex-col gap-3">
-        <div>
-          <Label htmlFor="eventTitle">Event</Label>
-          <input id="eventTitle" className={`${inputClass} w-full`} placeholder="Event and day" value={drafts.title} onChange={(event) => edit({ title: event.target.value })} />
+      <details className="mt-3 border-t border-rule pt-3">
+        <summary className="cursor-pointer text-[0.82rem] font-semibold text-muted">Paste names</summary>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <PasteNames label="film teams" value={paste.team} note={pasteNote.team} onChange={(text) => setPaste((current) => ({ ...current, team: text }))} onAdd={() => addPasted('team')} />
+          <PasteNames label="decision makers" value={paste.dm} note={pasteNote.dm} onChange={(text) => setPaste((current) => ({ ...current, dm: text }))} onAdd={() => addPasted('dm')} />
         </div>
-        <div>
-          <Label htmlFor="slotLabels">Meeting times</Label>
-          <textarea id="slotLabels" className={`${textareaClass} min-h-56`} placeholder={'15:20\n15:40\n…'} value={drafts.slotsText} onChange={(event) => edit({ slotsText: event.target.value })} />
-          <p className="mt-1 text-[0.78rem] text-muted">One per line, in order.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={apply} disabled={!dirty || blocked}>Apply edits</Button>
-          {dirty && !blocked && <span className="text-[0.78rem] text-muted">Not yet applied</span>}
-        </div>
-        {duplicateNames.length > 0 && <p className="text-[0.8rem] font-semibold text-warn">Names must be unique: {duplicateNames.join(', ')}</p>}
-        {reconciliation.ambiguous.map((item) => (
-          <p key={item.side} className="text-[0.8rem] font-semibold text-warn">Could not match edited {item.side === 'team' ? 'teams' : 'decision makers'} safely.</p>
-        ))}
-        <Button className="self-start" onClick={loadSample}>Load sample day</Button>
-      </aside>
-    </div>
+      </details>
+      {dirty && !blocked && <p className="mt-1 text-[0.78rem] text-muted">Roster edits not yet applied.</p>}
+      {duplicateNames.length > 0 && <p className="mt-1 text-[0.8rem] font-semibold text-warn">Names must be unique: {duplicateNames.join(', ')}</p>}
+      {reconciliation.ambiguous.map((item) => (
+        <p key={item.side} className="mt-1 text-[0.8rem] font-semibold text-warn">Could not match edited {item.side === 'team' ? 'teams' : 'decision makers'} safely.</p>
+      ))}
+    </section>
   )
 }
 
@@ -284,7 +243,7 @@ function EditableName({ angled = false, label, placeholder, value, onChange, onD
 function PasteNames({ label, value, note, onChange, onAdd }: { label: string; value: string; note: string; onChange: (text: string) => void; onAdd: () => void }) {
   return (
     <div>
-      <Label>Paste {label}</Label>
+      <label className="eyebrow mb-1 block">Paste {label}</label>
       <textarea aria-label={`Paste ${label}`} className={`${textareaClass} min-h-24`} placeholder="One per line" value={value} onChange={(event) => onChange(event.target.value)} />
       <div className="mt-2 flex items-center gap-2">
         <Button onClick={onAdd} disabled={parseRoster(value).length === 0}>Add names</Button>

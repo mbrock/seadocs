@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { availabilityOfProject, emptyProject, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
 import { download } from '../lib/csv'
+import { sampleProject } from '../lib/sample'
+import { Button } from './ui'
 
 interface Props {
   project: Project
@@ -47,6 +49,12 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
     setNote('new project')
   }
 
+  function loadSample() {
+    if (!isEmpty && !confirm('Replace the current project with the sample? You can Undo afterwards.')) return
+    onChange(sampleProject())
+    setNote('sample loaded')
+  }
+
   return (
     <div className="flex items-center gap-1 text-[0.8rem]">
       {issues > 0 && (
@@ -55,22 +63,25 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
         </a>
       )}
       {note && <span className="mr-2 hidden text-muted sm:inline">{note}</span>}
-      <ToolButton onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+      <Button variant="quiet" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
         Undo
-      </ToolButton>
-      <ToolButton onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
+      </Button>
+      <Button variant="quiet" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
         Redo
-      </ToolButton>
+      </Button>
       <span className="mx-1 h-4 w-px bg-rule" />
-      <ToolButton onClick={save} disabled={isEmpty} title="Download the project as a file">
+      <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download the project as a file">
         Save
-      </ToolButton>
-      <ToolButton onClick={() => fileInput.current?.click()} title="Open a project file">
+      </Button>
+      <Button variant="quiet" onClick={() => fileInput.current?.click()} title="Open a project file">
         Open
-      </ToolButton>
-      <ToolButton onClick={reset} disabled={isEmpty} title="Clear everything">
+      </Button>
+      <Button variant="quiet" onClick={reset} disabled={isEmpty} title="Clear everything">
         New
-      </ToolButton>
+      </Button>
+      <Button variant="quiet" onClick={loadSample} title="Replace the current project with the sample day">
+        Sample
+      </Button>
       <input
         ref={fileInput}
         type="file"
@@ -83,17 +94,5 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
         }}
       />
     </div>
-  )
-}
-
-function ToolButton({ children, ...props }: { children: ReactNode; onClick: () => void; disabled?: boolean; title: string }) {
-  return (
-    <button
-      type="button"
-      className="cursor-pointer rounded-[3px] px-1.5 py-0.5 font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted"
-      {...props}
-    >
-      {children}
-    </button>
   )
 }

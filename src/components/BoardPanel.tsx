@@ -24,7 +24,7 @@ import { boardCsv, download } from '../lib/csv'
 import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
+import { Button, Empty, Name, OnlineMark, Panel, PanelHeader, AskPair, Segmented } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
 import { validateAdvancedBoard, type AdvancedSolverResult, type SolverStatusInfo } from '../lib/advancedSolver'
@@ -40,6 +40,15 @@ interface Cell {
   side: Side
   anchor: Id
 }
+
+interface BoardData {
+  project: Project
+  names: Map<Id, DisplayName>
+  index: MeetingIndex
+  available: Availability
+}
+
+const askTint = { dm: 'bg-gold-2 text-ink' } as const
 
 export function BoardPanel({ project, onChange }: Props) {
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
@@ -137,16 +146,16 @@ export function BoardPanel({ project, onChange }: Props) {
   const progressStage = solverProgress?.phaseIndex ?? 0
   const progressTotal = solverProgress?.totalPhases ?? 7
   const progressPercent = solverProgress ? (progressStage ? progressStage / progressTotal * 100 : solverProgress.state === 'initializing' ? 6 : 3) : 0
+  const board = { project, names, index, available }
 
   return (
     <div className="flex flex-col gap-2">
       <Panel className="min-w-0">
-        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'} className="!py-1.5">
+        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'}>
           {hasBoard && <Key />}
           {hasBoard && (
             <Segmented
               label="Rows"
-              size="sm"
               value={rows}
               onChange={(v) => {
                 setRows(v)
@@ -160,7 +169,7 @@ export function BoardPanel({ project, onChange }: Props) {
           )}
           <Button
             variant="primary"
-            className="relative w-[7.5rem] justify-center overflow-hidden !px-2 !py-1"
+            className="relative w-[7.5rem] justify-center overflow-hidden"
             disabled={!advancedRunning && (!hasPeople || !hasRequests)}
             title={advancedRunning ? 'Cancel generation' : 'Generate schedule'}
             aria-label={advancedRunning ? `Cancel generation, stage ${progressStage} of ${progressTotal}` : 'Generate schedule'}
@@ -174,7 +183,6 @@ export function BoardPanel({ project, onChange }: Props) {
             <span className="relative">{advancedRunning ? `Cancel · ${progressStage}/${progressTotal}` : 'Generate'}</span>
           </Button>
           <Button
-            className="!px-2 !py-1"
             disabled={!hasBoard || issues.length > 0}
             title={issues.length > 0 ? 'Fix the problems first' : 'Download the board as a spreadsheet'}
             onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
@@ -183,7 +191,7 @@ export function BoardPanel({ project, onChange }: Props) {
           </Button>
         </PanelHeader>
         {hasBoard ? (
-          <Grid project={project} names={names} index={index} available={available} rows={rows} selected={selected} onSelect={setCell} />
+          <Grid board={board} rows={rows} selected={selected} onSelect={setCell} />
         ) : (
           <Empty>
             {!hasPeople
@@ -198,17 +206,14 @@ export function BoardPanel({ project, onChange }: Props) {
       <aside className={selected ? 'rounded-[4px] border border-rule bg-paper' : ''}>
         {selected ? (
           <Inspector
-            project={project}
-            names={names}
-            index={index}
-            available={available}
+            board={board}
             cell={selected}
             onAssign={setMeetings}
             onAvailability={(id, slot, ok) => onChange((p) => withAvailability(p, id, slot, ok))}
             onClose={() => setCell(null)}
           />
         ) : (
-          <NotScheduled project={project} names={names} index={index} available={available} stats={stats} hasBoard={hasBoard} />
+          <NotScheduled board={board} stats={stats} hasBoard={hasBoard} />
         )}
       </aside>
     </div>
@@ -222,22 +227,17 @@ function TeamBar({ show, className = '' }: { show: boolean; className?: string }
 
 /** Rows = one side (decision makers or teams), columns = slots. */
 function Grid({
-  project,
-  names,
-  index,
-  available,
+  board,
   rows,
   selected,
   onSelect,
 }: {
-  project: Project
-  names: Map<Id, DisplayName>
-  index: MeetingIndex
-  available: Availability
+  board: BoardData
   rows: Side
   selected: Cell | null
   onSelect: (c: Cell) => void
 }) {
+  const { project, names, index, available } = board
   const people: Participant[] = rows === 'dm' ? project.dms : project.teams
   const partners: Participant[] = rows === 'dm' ? project.teams : project.dms
   const partnerById = new Map(partners.map((p) => [p.id, p]))
@@ -313,42 +313,40 @@ function Grid({
 function Key() {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <KeyItem swatch={<Swatch className={askTint.dm} />}>DM asked</KeyItem>
-      <KeyItem
-        swatch={
-          <span className="relative inline-flex h-3 w-3 border border-rule">
-            <TeamBar show className="absolute top-0 right-0" />
-          </span>
-        }
-      >
+      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
+        <span aria-hidden className={`h-3 w-3 rounded-[2px] border border-rule ${askTint.dm}`} /> DM asked
+      </span>
+      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
+        <span className="relative inline-flex h-3 w-3 border border-rule">
+          <TeamBar show className="absolute top-0 right-0" />
+        </span>{' '}
         team asked
-      </KeyItem>
-      <KeyItem swatch={<Swatch className="bg-paper" />}>nobody asked</KeyItem>
-      <KeyItem swatch={<Swatch className="hatched" />}>not available</KeyItem>
+      </span>
+      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
+        <span aria-hidden className="h-3 w-3 rounded-[2px] border border-rule bg-paper" /> nobody asked
+      </span>
+      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
+        <span aria-hidden className="hatched h-3 w-3 rounded-[2px] border border-rule" /> not available
+      </span>
     </div>
   )
 }
 
 /** The selected cell: who is there, and everyone who could be, with what it would do. */
 function Inspector({
-  project,
-  names,
-  index,
-  available,
+  board,
   cell,
   onAssign,
   onAvailability,
   onClose,
 }: {
-  project: Project
-  names: Map<Id, DisplayName>
-  index: MeetingIndex
-  available: Availability
+  board: BoardData
   cell: Cell
   onAssign: (m: PlacedMeeting[]) => void
   onAvailability: (id: Id, slot: Id, available: boolean) => void
   onClose: () => void
 }) {
+  const { project, names, index, available } = board
   const { slot, side, anchor } = cell
   const other: Side = side === 'dm' ? 'team' : 'dm'
   const anchorPerson = (side === 'dm' ? project.dms : project.teams).find((p) => p.id === anchor)!
@@ -406,7 +404,7 @@ function Inspector({
         return null
     }
   }
-  const list = (list: CandidateRow[]) => <CandidateList rows={list} project={project} names={names} onPick={assign} load={load} effectLine={effectLine} />
+  const list = (list: CandidateRow[]) => <CandidateList rows={list} board={board} onPick={assign} load={load} effectLine={effectLine} />
 
   return (
     <div className="flex flex-col">
@@ -492,19 +490,18 @@ interface CandidateRow {
 
 function CandidateList({
   rows,
-  project,
-  names,
+  board,
   onPick,
   load,
   effectLine,
 }: {
   rows: CandidateRow[]
-  project: Project
-  names: Map<Id, DisplayName>
+  board: BoardData
   onPick: (id: Id) => void
   load: Map<Id, number>
   effectLine: (e: AssignEffect) => ReactNode
 }) {
+  const { project, names } = board
   if (!rows.length) return <p className="py-1 text-[0.8rem] text-muted">Nobody.</p>
   return (
     <ul className="divide-y divide-rule">
@@ -531,21 +528,16 @@ function CandidateList({
 
 /** Requested meetings that did not fit, shown below the full-width board. */
 function NotScheduled({
-  project,
-  names,
-  index,
-  available,
+  board,
   stats,
   hasBoard,
 }: {
-  project: Project
-  names: Map<Id, DisplayName>
-  index: MeetingIndex
-  available: Availability
+  board: BoardData
   stats: Stats
   hasBoard: boolean
 }) {
   if (!hasBoard) return null
+  const { project, names, index, available } = board
   const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
 
@@ -569,7 +561,7 @@ function NotScheduled({
 
   return (
     <Panel>
-      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} className="!py-1" />
+      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} />
       <div className="px-2 py-1">
         {stats.unmet.length === 0 ? (
           <p className="text-[0.8rem] text-muted">Every request got a meeting.</p>
