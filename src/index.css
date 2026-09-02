@@ -76,7 +76,4 @@
   body {
     background: white;
   }
-  .print-page {
-    break-after: page;
-  }
 }

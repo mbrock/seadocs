@@ -5,12 +5,10 @@ import { commit, initialHistory, redo, undo } from './lib/history'
 import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
 import { BoardPanel } from './components/BoardPanel'
-import { SchedulesPanel } from './components/SchedulesPanel'
 
 const VIEWS = [
   ['setup', 'Setup'],
   ['board', 'Board'],
-  ['schedules', 'Schedules'],
 ] as const
 type View = (typeof VIEWS)[number][0]
 
@@ -93,12 +91,11 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        {/* Keep Setup mounted so unapplied edits survive visits to the board or schedules. */}
+        {/* Keep Setup mounted so unapplied edits survive visits to the board. */}
         <div hidden={view !== 'setup'}>
           <SetupPanel project={project} onChange={setProject} />
         </div>
         {view === 'board' && <BoardPanel project={project} onChange={setProject} />}
-        {view === 'schedules' && <SchedulesPanel project={project} />}
       </main>
 
       <footer className="wrap border-t border-rule py-3 text-[0.8rem] text-muted print:hidden">

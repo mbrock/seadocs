@@ -1,5 +1,5 @@
 import { indexMeetings } from './scheduler'
-import { participantName, slotLabel, tableLabel, type Project } from './project'
+import { participantName, slotLabel, type Project } from './project'
 
 function csv(rows: string[][]): string {
   return rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -17,25 +17,6 @@ export function boardCsv(project: Project): string {
         return m ? participantName(project, m.team) : ''
       }),
     ])
-  }
-  return csv(rows)
-}
-
-/** Everyone's running order in one long table, handy for mail-merge. */
-export function personalCsv(project: Project): string {
-  const { byCell, byTeamSlot } = indexMeetings(project.meetings)
-  const rows = [['Who', 'Role', 'Slot', 'Meets', 'Where']]
-  for (const t of project.teams) {
-    for (const slot of project.slots) {
-      const m = byTeamSlot.get(`${slot.id}|${t.id}`)
-      rows.push([t.name, 'Team', slotLabel(project, slot.id), m ? participantName(project, m.dm) : '', m ? tableLabel(project, m.dm) : ''])
-    }
-  }
-  for (const d of project.dms) {
-    for (const slot of project.slots) {
-      const m = byCell.get(`${slot.id}|${d.id}`)
-      rows.push([d.name, 'Decision maker', slotLabel(project, slot.id), m ? participantName(project, m.team) : '', tableLabel(project, d.id)])
-    }
   }
   return csv(rows)
 }

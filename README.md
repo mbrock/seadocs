@@ -4,15 +4,14 @@ A small browser tool for scheduling one-to-one meetings at a festival
 marketplace: **project teams** (artists, companies, producers pitching work)
 meet **decision makers** (programmers, commissioners, funders) in short, fixed
 time slots. Given who wants to meet whom, it builds the board — which team sits
-with which decision maker in which slot — and produces the per-person running
-orders you'd print or send out.
+with which decision maker in which slot.
 
 It is a static site with no server. Everything stays in the browser (autosaved
 to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-The app has three views, reached from the header bar (the view is in the URL
+The app has two views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
 save / open / new, and shows a problem count when the board has one.
 
@@ -64,12 +63,6 @@ save / open / new, and shows a problem count when the board has one.
   full, team full, or the slot where both are still free). Export is disabled
   while problems remain. The solver runs entirely in a Web Worker in this
   browser and never uploads roster or interest data.
-- **Schedules** — one running order per team or decision maker, headed with
-  the event name and stamped with the print time, to print one at a time or
-  all at once (one page each), or export everyone's as CSV. Decision makers
-  stay at a numbered table (their position in the roster; "online" for those
-  joining remotely) and teams walk, so team sheets say where to go.
-
 Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
@@ -153,7 +146,6 @@ src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
 src/components/SetupPanel.tsx    editable participant/request matrix, day settings and sample loader
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
-src/components/SchedulesPanel.tsx per-person running orders, print, CSV
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
 src/lib/scheduler.ts       participants and availability, greedy selection, slot assignment (edge colouring), cell edits and their effects, stats, issues

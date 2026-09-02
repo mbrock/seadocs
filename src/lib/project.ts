@@ -121,16 +121,6 @@ export function slotLabel(project: Project, slotId: Id): string {
   return project.slots[i]?.label || `Slot ${i + 1}`
 }
 
-/**
- * Where a decision maker sits: decision makers stay put and teams walk, so each
- * gets a table numbered by roster position; one joining online has none.
- */
-export function tableLabel(project: Project, dmId: Id): string {
-  const i = project.dms.findIndex((d) => d.id === dmId)
-  if (i < 0) return ''
-  return project.dms[i].online ? 'online' : `Table ${i + 1}`
-}
-
 export function participantName(project: Project, id: Id): string {
   const p = project.teams.find((t) => t.id === id) ?? project.dms.find((d) => d.id === id)
   return p ? p.name : id

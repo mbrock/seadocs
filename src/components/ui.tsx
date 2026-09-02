@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { Id, Participant } from '../lib/scheduler'
+import type { Participant } from '../lib/scheduler'
 import type { DisplayName } from '../lib/names'
 import { askedBy } from '../lib/describe'
 
@@ -172,73 +172,5 @@ export function OnlineMark({ show }: { show?: boolean }) {
     <span title="joins online" aria-label="online" className="ml-1 inline-block align-middle text-[0.7rem] font-bold text-sea-3">
       ◌
     </span>
-  )
-}
-
-export interface ChooserGroup {
-  title: string
-  people: Participant[]
-}
-
-/**
- * Pick one person from grouped lists. A vertical list from `lg` up (meant for
- * a sticky side column); a single <select> below that.
- */
-export function Chooser({
-  groups,
-  current,
-  onPick,
-  names,
-  meta,
-  label,
-}: {
-  groups: ChooserGroup[]
-  current: Id | null
-  onPick: (id: Id) => void
-  names?: Map<Id, DisplayName>
-  /** Small right-aligned annotation per row, e.g. a count. */
-  meta?: (p: Participant) => ReactNode
-  label: string
-}) {
-  return (
-    <>
-      <div className="px-3 py-3 lg:hidden">
-        <select aria-label={label} value={current ?? ''} onChange={(e) => onPick(e.target.value)} className={`${inputClass} w-full`}>
-          {groups.map((g) => (
-            <optgroup key={g.title} label={g.title}>
-              {g.people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
-      <div className="hidden lg:block">
-        {groups.map((g) => (
-          <div key={g.title} className="border-b border-rule py-2 last:border-b-0">
-            <div className="eyebrow px-3 py-1">{g.title}</div>
-            <ul>
-              {g.people.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    aria-current={p.id === current ? 'true' : undefined}
-                    onClick={() => onPick(p.id)}
-                    className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1 text-left text-[0.88rem] hover:bg-canvas ${
-                      p.id === current ? 'bg-accent-soft font-semibold' : ''
-                    }`}
-                  >
-                    <Name person={p} display={names?.get(p.id)} />
-                    {meta && <span className="shrink-0 text-[0.75rem] text-muted tabular-nums">{meta(p)}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </>
   )
 }
