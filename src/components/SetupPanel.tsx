@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { asked, type Id } from '../lib/scheduler'
 import { sampleProject } from '../lib/sample'
+import { countryCode, parseName, surname } from '../lib/names'
 import {
   parseLines,
   parseRoster,
@@ -147,19 +148,21 @@ export function SetupPanel({ project, onChange }: Props) {
             <span><span className="mr-1 inline-block h-3 w-3 rounded-[2px] border border-sea-3 bg-sea-2 align-[-1px]" />team request</span>
           </div>
           <div className="flex gap-2">
+            <Button variant="quiet" onClick={() => edit({ dms: [...drafts.dms, row()] })}>+ DM</Button>
             <Button variant="quiet" onClick={() => confirm('Clear all decision maker requests?') && onChange(withAsks(project, {}, project.teamAsks))}>Clear DM requests</Button>
             <Button variant="quiet" onClick={() => confirm('Clear all team requests?') && onChange(withAsks(project, project.dmAsks, {}))}>Clear team requests</Button>
           </div>
         </div>
 
-        <div className="max-h-[calc(100vh-8rem)] overflow-auto rounded-[4px] border border-rule bg-paper">
-          <table className="w-max min-w-full border-separate border-spacing-0 text-[0.8rem]">
+        <div className="max-h-[calc(100vh-7rem)] overflow-auto pb-3">
+          <table className="mr-16 w-max border-separate border-spacing-0 text-[0.8rem]">
             <thead className="sticky top-0 z-20 bg-paper">
               <tr>
-                <th className="sticky left-0 z-30 min-w-64 border-r border-b border-rule bg-paper p-2 text-left align-bottom font-semibold">Team</th>
+                <th className="sticky left-0 z-30 h-20 w-52 max-w-52 border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold">Team</th>
                 {drafts.dms.map((dm, index) => (
-                  <th key={dm.key} className="w-28 min-w-28 border-r border-b border-rule bg-paper p-1 align-bottom font-normal">
+                  <th key={dm.key} className="group relative h-20 w-12 min-w-12 overflow-visible p-0 align-bottom font-normal">
                     <EditableName
+                      angled
                       label={`DM ${index + 1}`}
                       placeholder="Name | Organisation, Country"
                       value={dm.text}
@@ -168,15 +171,12 @@ export function SetupPanel({ project, onChange }: Props) {
                     />
                   </th>
                 ))}
-                <th className="sticky right-0 z-20 min-w-24 border-b border-rule bg-paper p-2 text-left align-bottom">
-                  <Button variant="quiet" onClick={() => edit({ dms: [...drafts.dms, row()] })}>+ DM</Button>
-                </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="outline outline-1 outline-rule">
               {drafts.teams.map((team, teamIndex) => (
                 <tr key={team.key} className="group">
-                  <th className="sticky left-0 z-10 border-r border-b border-rule bg-paper p-1 text-left font-normal group-hover:bg-canvas">
+                  <th className="sticky left-0 z-10 w-52 max-w-52 border-l border-b border-rule bg-paper px-2 py-1 text-left font-normal group-hover:bg-canvas">
                     <EditableName
                       label={`team ${teamIndex + 1}`}
                       placeholder="Film team"
@@ -186,9 +186,9 @@ export function SetupPanel({ project, onChange }: Props) {
                     />
                   </th>
                   {drafts.dms.map((dm) => (
-                    <td key={dm.key} className="border-r border-b border-rule/70 p-2 group-hover:bg-canvas/50">
+                    <td key={dm.key} className="border-l border-b border-rule/70 px-1 py-1.5 group-hover:bg-canvas/50">
                       {team.id && dm.id ? (
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1">
                           <AskCheckbox kind="dm" checked={asked(project.dmAsks, team.id, dm.id)} team={team.id} dm={dm.id} teamName={team.text} dmName={dm.text} onChange={onChange} />
                           <AskCheckbox kind="team" checked={asked(project.teamAsks, team.id, dm.id)} team={team.id} dm={dm.id} teamName={team.text} dmName={dm.text} onChange={onChange} />
                         </div>
@@ -197,20 +197,19 @@ export function SetupPanel({ project, onChange }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="sticky right-0 border-b border-rule bg-paper" />
                 </tr>
               ))}
               <tr>
-                <td className="sticky left-0 z-10 border-r border-rule bg-paper p-2">
+                <td className="sticky left-0 z-10 bg-paper px-2 py-1">
                   <Button variant="quiet" onClick={() => edit({ teams: [...drafts.teams, row()] })}>+ film team</Button>
                 </td>
-                <td colSpan={Math.max(1, drafts.dms.length + 1)} />
+                <td colSpan={Math.max(1, drafts.dms.length)} />
               </tr>
             </tbody>
           </table>
         </div>
 
-        <details className="mt-3 rounded-[4px] border border-rule bg-paper p-3">
+        <details className="mt-3 border-t border-rule pt-3">
           <summary className="cursor-pointer text-[0.82rem] font-semibold text-muted">Paste names</summary>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <PasteNames label="film teams" value={paste.team} note={pasteNote.team} onChange={(text) => setPaste((current) => ({ ...current, team: text }))} onAdd={() => addPasted('team')} />
@@ -243,11 +242,41 @@ export function SetupPanel({ project, onChange }: Props) {
   )
 }
 
-function EditableName({ label, placeholder, value, onChange, onDelete }: { label: string; placeholder: string; value: string; onChange: (text: string) => void; onDelete: () => void }) {
+function EditableName({ angled = false, label, placeholder, value, onChange, onDelete }: { angled?: boolean; label: string; placeholder: string; value: string; onChange: (text: string) => void; onDelete: () => void }) {
+  const entry = parseRoster(value)[0]
+  const parsed = parseName(entry?.name ?? value)
+  const short = entry?.code || surname(parsed.person)
+  const tag = countryCode(parsed.country)
+  if (angled) {
+    return (
+      <>
+        <input
+          aria-label={label}
+          className="peer absolute bottom-0 left-0 z-10 w-40 origin-bottom-left -rotate-[22deg] bg-transparent py-1 pl-2 text-[0.8rem] text-transparent focus:z-30 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink"
+          placeholder={placeholder}
+          title={value}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className="pointer-events-none absolute bottom-0 left-0 z-20 inline-flex origin-bottom-left -rotate-[22deg] items-center border-b border-rule pl-2 whitespace-nowrap peer-focus:hidden">
+          {short}
+          {tag && <span className="ml-1 rounded-[2px] border border-current/30 px-[3px] text-[0.58rem] font-bold tracking-[0.08em] opacity-70">{tag}</span>}
+        </span>
+        <button type="button" aria-label={`Delete ${label}`} title="Delete" onClick={onDelete} className="absolute right-0 bottom-0 z-20 px-0.5 text-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-warn">×</button>
+      </>
+    )
+  }
   return (
-    <div className="flex items-center gap-1">
-      <input aria-label={label} className={`${inputClass} w-0 min-w-0 flex-1`} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
-      <button type="button" aria-label={`Delete ${label}`} title="Delete" onClick={onDelete} className="px-1 text-muted hover:text-warn">×</button>
+    <div className="flex items-center gap-0.5">
+      <input
+        aria-label={label}
+        className="w-0 min-w-0 flex-1 bg-transparent p-0 text-[0.8rem] focus:bg-paper focus:outline-1 focus:outline-ink"
+        placeholder={placeholder}
+        title={value}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button type="button" aria-label={`Delete ${label}`} title="Delete" onClick={onDelete} className="shrink-0 px-0.5 text-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-warn">×</button>
     </div>
   )
 }
