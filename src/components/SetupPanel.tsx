@@ -1,8 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { asked, pairKey, type Participant } from '../lib/scheduler'
-import { parseRoster, prune, rosterText, withAsk, withAsks, type AskKind, type Project } from '../lib/project'
+import { parseRoster, prune, rosterText, withAsk, type AskKind, type Project } from '../lib/project'
 import { Button, Name } from './ui'
 import { useNames } from './useNames'
+import type { DisplayName } from '../lib/names'
 
 interface Props {
   project: Project
@@ -47,10 +48,9 @@ export function SetupPanel({ project, onChange, generating }: Props) {
     onChange((current) => prune({ ...current, [side]: current[side].filter((person) => person.id !== id) }))
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       <RequestMatrix
         kind="dm"
-        title="Decision-maker requests"
         rows={project.dms}
         columns={project.teams}
         project={project}
@@ -64,7 +64,6 @@ export function SetupPanel({ project, onChange, generating }: Props) {
       />
       <RequestMatrix
         kind="team"
-        title="Team requests"
         rows={project.teams}
         columns={project.dms}
         project={project}
@@ -82,7 +81,6 @@ export function SetupPanel({ project, onChange, generating }: Props) {
 
 function RequestMatrix({
   kind,
-  title,
   rows,
   columns,
   project,
@@ -95,7 +93,6 @@ function RequestMatrix({
   onAdd,
 }: {
   kind: AskKind
-  title: string
   rows: Participant[]
   columns: Participant[]
   project: Project
@@ -112,17 +109,7 @@ function RequestMatrix({
   const asks = kind === 'dm' ? project.dmAsks : project.teamAsks
 
   return (
-    <section className="min-w-0">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="eyebrow text-ink">{title}</h2>
-        <Button
-          variant="quiet"
-          disabled={Object.keys(asks).length === 0}
-          onClick={() => onChange((current) => kind === 'dm' ? withAsks(current, {}, current.teamAsks) : withAsks(current, current.dmAsks, {}))}
-        >
-          Clear requests
-        </Button>
-      </div>
+    <section className="w-fit max-w-full min-w-0">
       <div className="overflow-auto pb-1">
         <table className="mr-16 w-max border-separate border-spacing-0 text-[0.8rem]">
           <thead className="sticky top-0 z-20 bg-paper">
@@ -143,25 +130,14 @@ function RequestMatrix({
             {rows.map((person, rowIndex) => (
               <tr key={person.id} className="group">
                 <th className="sticky left-0 z-10 w-52 max-w-52 border-l border-b border-rule bg-paper px-2 py-1 text-left font-normal group-hover:bg-canvas">
-                  <div className="flex items-center gap-0.5">
-                    <input
-                      aria-label={`${rowSide} ${rowIndex + 1}`}
-                      className="w-0 min-w-0 flex-1 bg-transparent p-0 text-[0.8rem] focus:bg-paper focus:outline-1 focus:outline-ink"
-                      placeholder={kind === 'dm' ? 'Name | Organisation, Country' : 'Film team'}
-                      title={rosterText([person])}
-                      value={rosterText([person])}
-                      onChange={(event) => onEdit(person.id, event.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Delete ${rowSide} ${rowIndex + 1}`}
-                      title="Delete"
-                      onClick={() => onDelete(person.id)}
-                      className="shrink-0 px-0.5 text-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-warn"
-                    >
-                      ×
-                    </button>
-                  </div>
+                  <EditableParticipant
+                    person={person}
+                    display={names.get(person.id)}
+                    label={`${rowSide} ${rowIndex + 1}`}
+                    placeholder={kind === 'dm' ? 'Name | Organisation, Country' : 'Film team'}
+                    onChange={(text) => onEdit(person.id, text)}
+                    onDelete={() => onDelete(person.id)}
+                  />
                 </th>
                 {columns.map((column) => {
                   const team = kind === 'dm' ? column.id : person.id
@@ -201,5 +177,49 @@ function RequestMatrix({
         </table>
       </div>
     </section>
+  )
+}
+
+function EditableParticipant({
+  person,
+  display,
+  label,
+  placeholder,
+  onChange,
+  onDelete,
+}: {
+  person: Participant
+  display?: DisplayName
+  label: string
+  placeholder: string
+  onChange: (text: string) => void
+  onDelete: () => void
+}) {
+  const value = rosterText([person])
+  return (
+    <div className="relative flex items-center gap-0.5">
+      <input
+        aria-label={label}
+        className={`peer z-10 w-0 min-w-0 flex-1 bg-transparent p-0 text-[0.8rem] focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${value ? 'text-transparent' : 'text-muted'}`}
+        placeholder={placeholder}
+        title={value}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value && (
+        <span className="pointer-events-none absolute inset-y-0 left-0 right-3 flex items-center peer-focus:hidden">
+          <Name person={person} display={display} className="flex" />
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={`Delete ${label}`}
+        title="Delete"
+        onClick={onDelete}
+        className="z-20 shrink-0 px-0.5 text-muted opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-warn"
+      >
+        ×
+      </button>
+    </div>
   )
 }

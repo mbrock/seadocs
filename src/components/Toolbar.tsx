@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { availabilityOfProject, emptyProject, type Project } from '../lib/project'
+import { availabilityOfProject, emptyProject, withAsks, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
 import { boardCsv, download } from '../lib/csv'
@@ -25,6 +25,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
   const [note, setNote] = useState('')
   const issues = useMemo(() => findIssues(project.meetings, availabilityOfProject(project)).length, [project])
   const isEmpty = project.teams.length === 0 && project.dms.length === 0
+  const hasRequests = Object.keys(project.dmAsks).length + Object.keys(project.teamAsks).length > 0
 
   function save() {
     download(`meeting-board-${new Date().toISOString().slice(0, 10)}.json`, serialize(project), 'application/json')
@@ -56,7 +57,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
   }
 
   return (
-    <div className="flex items-center gap-1 text-[0.8rem]">
+    <div className="flex flex-wrap items-center justify-end gap-1 text-[0.8rem]">
       {issues > 0 && (
         <a href="#board" className="mr-2 rounded-[2px] bg-warn px-1.5 font-semibold text-paper">
           {issues} problem{issues === 1 ? '' : 's'}
@@ -69,7 +70,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
       <Button variant="quiet" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
         Redo
       </Button>
-      <span className="mx-1 h-4 w-px bg-rule" />
+      <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
       <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download the project as a file">
         Save
       </Button>
@@ -89,6 +90,15 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
       </Button>
       <Button variant="quiet" onClick={loadSample} title="Replace the current project with the sample day">
         Sample
+      </Button>
+      <Button
+        variant="quiet"
+        disabled={!hasRequests}
+        onClick={() => onChange((current) => withAsks(current, {}, {}))}
+        title="Clear every decision-maker and team request"
+      >
+        <span className="sm:hidden">Clear</span>
+        <span className="hidden sm:inline">Clear requests</span>
       </Button>
       <input
         ref={fileInput}

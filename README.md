@@ -13,13 +13,14 @@ The interface follows the browser's light or dark system preference.
 ## What it does
 
 Setup and the generated board share one page. The header bar holds undo / redo,
-save / export / open / new, and the sample loader, and shows a problem count
-linking to the board when it has one. With no saved browser state, the sample
-day is loaded automatically.
+save / export / open / new, the sample loader, and the action that clears all
+requests, and shows a problem count linking to the board when it has one. With
+no saved browser state, the sample day is loaded automatically.
 
 - **Setup** — two request matrices, one for each side. Decision makers edit
   their names and requests down the rows of the first; film teams do the same
-  in the second. The other side appears as read-only columns. Adding, editing,
+  in the second. They sit beside each other when the viewport is wide enough
+  and wrap otherwise. The other side appears as read-only columns. Adding, editing,
   deleting, and changing a request all take effect immediately. A green or blue
   square means that side requested the meeting; its check mark means the current
   schedule fulfills it. Checks disappear while a replacement schedule is solving.
