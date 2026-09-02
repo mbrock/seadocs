@@ -1,95 +1,45 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { Participant, Side } from '../lib/scheduler'
-import type { DisplayName } from '../lib/names'
+import type { ButtonHTMLAttributes } from 'react'
+import type { Asked, Project } from '../lib/project'
 import { askedBy } from '../lib/describe'
+import { sideStyle, type ParticipantName } from './useNames'
 
-type Variant = 'primary' | 'default' | 'quiet'
+/** How components change the project: a function from the current project to the next. */
+export type UpdateProject = (update: (project: Project) => Project) => void
 
-const buttonStyles: Record<Variant, string> = {
-  primary: 'px-2 py-1 bg-ink text-paper hover:bg-accent disabled:hover:bg-ink',
+const buttonStyles = {
   default: 'px-2 py-1 border border-rule bg-paper hover:border-ink disabled:hover:border-rule',
   quiet: 'px-1 py-0 text-muted hover:text-ink hover:underline',
 }
 
-export function Button({ variant = 'default', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+export function Button({ variant = 'default', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof buttonStyles }) {
   return (
     <button
       type="button"
-      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[3px] font-semibold whitespace-nowrap disabled:cursor-default disabled:opacity-40 ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[3px] font-semibold whitespace-nowrap disabled:cursor-default disabled:opacity-40 ${buttonStyles[variant]}`}
       {...props}
     />
   )
 }
 
-export function Panel({ children, className = '', id }: { children: ReactNode; className?: string; id?: string }) {
-  return <section id={id} className={`rounded-[4px] bg-paper ${className}`}>{children}</section>
+const markStyles = {
+  both: 'bg-request-both',
+  dm: 'bg-request-dm',
+  team: 'bg-request-team',
+  nobody: 'outline outline-1 outline-rule',
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="px-2 py-3 text-center text-muted">{children}</p>
+/** The request square: one colour per side, split when both asked, an empty outline when nobody did. */
+export function RequestMark(asked: Asked) {
+  const who = asked.dm && asked.team ? 'both' : asked.dm ? 'dm' : asked.team ? 'team' : 'nobody'
+  return <span className={`inline-block size-4 shrink-0 align-middle ${markStyles[who]}`} title={askedBy(asked)} aria-label={askedBy(asked)} />
 }
 
-/** The shared request square; reduced opacity means the request is not on the board. */
-export function RequestMark({
-  dm,
-  team,
-  fulfilled = true,
-  showEmpty = false,
-  className = '',
-}: {
-  dm: boolean
-  team: boolean
-  fulfilled?: boolean
-  showEmpty?: boolean
-  className?: string
-}) {
-  const requested = dm || team
-  const both = dm && team
+/** A participant's name with its country tag ("ES Cornejo"), in the surname/title form or as a board code. */
+export function Name({ who, variant, className = '' }: { who: ParticipantName; variant: 'short' | 'code'; className?: string }) {
   return (
-    <span
-      className={`block size-4 shrink-0 ${requested && !fulfilled ? 'opacity-45' : ''} ${
-        requested
-          ? both ? '' : dm ? 'bg-request-dm' : 'bg-request-team'
-          : showEmpty ? 'outline outline-1 outline-rule' : 'invisible'
-      } ${className}`}
-      style={both ? { background: 'linear-gradient(135deg, var(--color-request-dm) 0 50%, var(--color-request-team) 50% 100%)' } : undefined}
-      title={askedBy(dm, team)}
-      aria-label={askedBy(dm, team)}
-    />
-  )
-}
-
-/**
- * A participant's name that truncates without losing its marks. With `display`
- * (from `displayNames`) it renders the surname plus the country tag:
- * "Cornejo ES". The `code` variant is for board cells: the title word for a
- * team ("Europe"), the surname for a person.
- */
-export function Name({
-  person,
-  display,
-  side,
-  className = '',
-  variant = 'short',
-  truncate = true,
-}: {
-  person: Participant
-  display?: DisplayName
-  side: Side
-  className?: string
-  variant?: 'short' | 'code'
-  truncate?: boolean
-}) {
-  const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
-  return (
-    <span className={`inline-flex max-w-full min-w-0 items-baseline ${side === 'team' ? 'italic' : ''} ${className}`} title={person.name}>
-      {display?.tag && <Tag>{display.tag}</Tag>}
-      <span className={truncate ? 'truncate' : 'whitespace-nowrap'}>{text}</span>
+    <span className={`flex items-baseline whitespace-nowrap ${sideStyle[who.side]} ${className}`} title={who.name}>
+      {who.tag && <span className="font-mono-matched mr-1 opacity-70">{who.tag}</span>}
+      {who[variant]}
     </span>
   )
-}
-
-/** Country code shown as ordinary inline text before a name. */
-function Tag({ children }: { children: ReactNode }) {
-  return <span className="font-mono-matched mr-1 shrink-0 opacity-70">{children}</span>
 }

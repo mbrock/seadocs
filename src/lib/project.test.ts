@@ -1,5 +1,19 @@
 import { test, expect } from 'vitest'
-import { emptyProject, parseNames, reconcileParticipants, withAvailability, withParticipants, withSlots, withSlotCount, toggleAsk, slotLabel } from './project'
+import {
+  emptyProject,
+  parseNames,
+  reconcileParticipants,
+  rosterLine,
+  withAvailability,
+  withNewParticipant,
+  withoutParticipant,
+  withParticipants,
+  withRosterLine,
+  withSlots,
+  withSlotCount,
+  toggleAsk,
+  slotLabel,
+} from './project'
 import { deserialize, serialize } from './persist'
 import { demoProject } from './fixtures'
 import { pairKey } from './scheduler'
@@ -212,4 +226,21 @@ test('deserialize reads v1 files from the original prototype', () => {
 test('deserialize rejects junk', () => {
   expect(() => deserialize('{"hello":1}')).toThrow(/Not a Meeting Board/)
   expect(() => deserialize('[]')).toThrow(/Not a Meeting Board/)
+})
+
+test('roster rows: add, edit the line, delete', () => {
+  let p = withNewParticipant(withNewParticipant(emptyProject(), 'dm'), 'team')
+  const [dm] = p.dms
+  const [team] = p.teams
+  expect(dm.name).toBe('')
+  expect(dm.id).not.toBe(team.id)
+
+  p = withRosterLine(withAvailability(p, dm.id, p.slots[0].id, false), 'dm', dm.id, 'Ana Ruiz | Fund, Spain = Ruiz *')
+  expect(p.dms[0]).toEqual({ id: dm.id, name: 'Ana Ruiz | Fund, Spain', code: 'Ruiz', online: true, unavailable: [p.slots[0].id] })
+  expect(rosterLine(p.dms[0])).toBe('Ana Ruiz | Fund, Spain = Ruiz *')
+
+  p = toggleAsk(p, 'dm', team.id, dm.id)
+  p = withoutParticipant(p, 'team', team.id)
+  expect(p.teams).toEqual([])
+  expect(p.dmAsks).toEqual({})
 })

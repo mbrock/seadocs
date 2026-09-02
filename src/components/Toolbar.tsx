@@ -1,15 +1,15 @@
-import { useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
-import { availabilityOfProject, emptyProject, withAsks, type Project } from '../lib/project'
+import { useRef, useState, type CSSProperties } from 'react'
+import { availabilityOfProject, emptyProject, hasAsks, withAsks, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
 import { boardCsv, download } from '../lib/csv'
 import { sampleProject } from '../lib/sample'
-import { Button } from './ui'
 import type { SolverStatusInfo } from '../lib/advancedSolver'
+import { Button, type UpdateProject } from './ui'
 
 interface Props {
   project: Project
-  onChange: Dispatch<SetStateAction<Project>>
+  onChange: UpdateProject
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -18,44 +18,39 @@ interface Props {
 }
 
 /**
- * File and history controls for the header: undo / redo, save / open / new.
- * Everything is saved in the browser as you go; the file buttons are for
- * moving the project elsewhere. Problems on the board (repeats, double bookings) show up here too.
+ * The header bar: solver progress, problems on the board, undo / redo, and the
+ * file actions. The project autosaves in the browser; files are for moving it elsewhere.
  */
 export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, solverStatus }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState('')
-  const issues = useMemo(() => findIssues(project.meetings, availabilityOfProject(project)).length, [project])
+  const issues = findIssues(project.meetings, availabilityOfProject(project)).length
   const isEmpty = project.teams.length === 0 && project.dms.length === 0
-  const hasRequests = Object.keys(project.dmAsks).length + Object.keys(project.teamAsks).length > 0
 
-  function save() {
+  const replaceWith = (next: Project, question: string, done: string) => {
+    if (!isEmpty && !confirm(question)) return
+    onChange(() => next)
+    setNote(done)
+  }
+
+  const save = () => {
     download(`meeting-board-${new Date().toISOString().slice(0, 10)}.json`, serialize(project), 'application/json')
     setNote('saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
   }
 
-  async function open(file: File) {
+  const open = async (file: File) => {
     try {
-      const opened = deserialize(await file.text())
-      if (!isEmpty && !confirm('Replace the current project with this file? You can Undo afterwards.')) return
-      onChange(opened)
-      setNote('opened ' + file.name)
+      replaceWith(deserialize(await file.text()), 'Replace the current project with this file? You can Undo afterwards.', 'opened ' + file.name)
     } catch (err) {
       setNote(`could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  function reset() {
+  const reset = () => {
     if (!confirm('Start a new project? This clears participants, interest and the board from this browser.')) return
     clearLocal()
-    onChange(emptyProject())
+    onChange(() => emptyProject())
     setNote('new project')
-  }
-
-  function loadSample() {
-    if (!isEmpty && !confirm('Replace the current project with the sample? You can Undo afterwards.')) return
-    onChange(sampleProject())
-    setNote('sample loaded')
   }
 
   return (
@@ -73,7 +68,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
       <Button variant="quiet" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
         Redo
       </Button>
-      <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
+      <Divider />
       <Button variant="quiet" onClick={reset} disabled={isEmpty} title="Clear everything">
         New
       </Button>
@@ -91,14 +86,18 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
       >
         Export
       </Button>
-      <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
-      <Button variant="quiet" onClick={loadSample} title="Replace the current project with the sample day">
+      <Divider />
+      <Button
+        variant="quiet"
+        onClick={() => replaceWith(sampleProject(), 'Replace the current project with the sample? You can Undo afterwards.', 'sample loaded')}
+        title="Replace the current project with the sample day"
+      >
         Sample
       </Button>
       <Button
         variant="quiet"
-        disabled={!hasRequests}
-        onClick={() => onChange((current) => withAsks(current, {}, {}))}
+        disabled={!hasAsks(project)}
+        onClick={() => onChange((p) => withAsks(p, {}, {}))}
         title="Clear every decision-maker and team request"
       >
         <span className="sm:hidden">Clear</span>
@@ -119,33 +118,40 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
   )
 }
 
+function Divider() {
+  return <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
+}
+
+const PHASES = 7
+
+/** A thin bar that fills phase by phase; during a phase it animates towards the phase's end over its time limit. */
 function SolverProgress({ status }: { status: SolverStatusInfo | null }) {
-  const total = status?.totalPhases ?? 7
-  const phase = status?.phaseIndex ?? 0
-  const runningPhase = status?.state === 'phase-started' || status?.state === 'incumbent'
-  const limit = status?.timeLimitSeconds ?? 1
-  const elapsed = status?.state === 'incumbent' ? (status.solverWallTime ?? 0) : 0
+  if (!status) return <span aria-hidden="true" className="mr-2 h-1 w-20" />
+
+  const total = status.totalPhases ?? PHASES
+  const phase = status.phaseIndex ?? 0
+  const running = status.state === 'phase-started' || status.state === 'incumbent'
+  const limit = status.timeLimitSeconds ?? 1
+  const elapsed = status.state === 'incumbent' ? (status.solverWallTime ?? 0) : 0
   const from = ((Math.max(0, phase - 1) + Math.min(1, elapsed / limit)) / total) * 100
   const to = (phase / total) * 100
-  const value = status?.state === 'phase-complete' || status?.state === 'building' ? to : from
-  const label = status?.phase ? `${phase}/${total} · ${status.phase}` : 'Preparing solver'
-  const style = runningPhase
-    ? ({ '--progress-from': `${from}%`, '--progress-to': `${to}%`, '--progress-duration': `${Math.max(0, limit - elapsed)}s` } as CSSProperties)
-    : { width: `${value}%` }
+  const label = status.phase ? `${phase}/${total} · ${status.phase}` : 'Preparing solver'
+  const bar = running
+    ? { className: 'scheduling-progress', style: { '--progress-from': `${from}%`, '--progress-to': `${to}%`, '--progress-duration': `${Math.max(0, limit - elapsed)}s` } as CSSProperties }
+    : { className: '', style: { width: `${to}%` } }
 
   return (
     <span
-      role={status ? 'progressbar' : undefined}
-      aria-label={status ? 'Building schedule' : undefined}
-      aria-valuemin={status ? 0 : undefined}
-      aria-valuemax={status ? total : undefined}
-      aria-valuenow={status ? Math.min(phase, total) : undefined}
-      aria-valuetext={status ? label : undefined}
-      aria-hidden={!status}
-      title={status ? label : undefined}
-      className={`mr-2 h-1 w-20 overflow-hidden rounded-full bg-rule ${status ? 'visible' : 'invisible'}`}
+      role="progressbar"
+      aria-label="Building schedule"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={Math.min(phase, total)}
+      aria-valuetext={label}
+      title={label}
+      className="mr-2 h-1 w-20 overflow-hidden rounded-full bg-rule"
     >
-      <span key={`${phase}-${status?.state}-${elapsed}`} className={`block h-full bg-accent ${runningPhase ? 'scheduling-progress' : ''}`} style={style} />
+      <span key={`${phase}-${status.state}-${elapsed}`} className={`block h-full bg-accent ${bar.className}`} style={bar.style} />
     </span>
   )
 }

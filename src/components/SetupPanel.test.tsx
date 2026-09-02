@@ -52,7 +52,7 @@ test('both matrices show the combined two-sided request state', () => {
 
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
-  expect(html.match(/linear-gradient/g)).toHaveLength(2)
+  expect(html.match(/bg-request-both/g)).toHaveLength(2)
   expect(html.match(/opacity-45/g)).toHaveLength(2)
 })
 

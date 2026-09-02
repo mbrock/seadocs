@@ -1,116 +1,35 @@
-import type { Dispatch, SetStateAction } from 'react'
-import { asked, pairKey, type Participant } from '../lib/scheduler'
-import { parseRoster, prune, rosterText, withAsk, type AskKind, type Project } from '../lib/project'
-import { Button, Name, RequestMark } from './ui'
-import { useNames } from './useNames'
-import type { DisplayName } from '../lib/names'
+import { asksFor, participants, rosterLine, withAsk, withNewParticipant, withoutParticipant, withRosterLine, type Project } from '../lib/project'
+import { otherSide, pairKey, pairOf, type Side } from '../lib/scheduler'
+import { Button, Name, RequestMark, type UpdateProject } from './ui'
+import { sideStyle, useNames, type ParticipantName } from './useNames'
 
 interface Props {
   project: Project
-  onChange: Dispatch<SetStateAction<Project>>
+  onChange: UpdateProject
 }
 
-type ParticipantSide = 'teams' | 'dms'
-
-/** Two request matrices. Each side edits its own roster down the left. */
+/** Two request matrices, one per side. Each side edits its own roster down the left. */
 export function SetupPanel({ project, onChange }: Props) {
-  const names = useNames(project)
-  const scheduled = new Set(project.meetings.map((meeting) => pairKey(meeting.team, meeting.dm)))
-
-  const updateParticipant = (side: ParticipantSide, id: string, text: string) =>
-    onChange((current) => {
-      const parsed = parseRoster(text)[0] ?? { name: '', online: false }
-      return {
-        ...current,
-        [side]: current[side].map((person) => {
-          if (person.id !== id) return person
-          const next: Participant = { id, name: parsed.name }
-          if (parsed.online) next.online = true
-          if (parsed.code) next.code = parsed.code
-          if (person.unavailable?.length) next.unavailable = person.unavailable
-          return next
-        }),
-      }
-    })
-
-  const addParticipant = (side: ParticipantSide) =>
-    onChange((current) => {
-      const prefix = side === 'teams' ? 't' : 'd'
-      return {
-        ...current,
-        [side]: [...current[side], { id: `${prefix}${current.nextId}`, name: '' }],
-        nextId: current.nextId + 1,
-      }
-    })
-
-  const deleteParticipant = (side: ParticipantSide, id: string) =>
-    onChange((current) => prune({ ...current, [side]: current[side].filter((person) => person.id !== id) }))
-
   return (
     <>
-      <RequestMatrix
-        kind="dm"
-        rows={project.dms}
-        columns={project.teams}
-        project={project}
-        names={names}
-        scheduled={scheduled}
-        onChange={onChange}
-        onEdit={(id, text) => updateParticipant('dms', id, text)}
-        onDelete={(id) => deleteParticipant('dms', id)}
-        onAdd={() => addParticipant('dms')}
-      />
-      <RequestMatrix
-        kind="team"
-        rows={project.teams}
-        columns={project.dms}
-        project={project}
-        names={names}
-        scheduled={scheduled}
-        onChange={onChange}
-        onEdit={(id, text) => updateParticipant('teams', id, text)}
-        onDelete={(id) => deleteParticipant('teams', id)}
-        onAdd={() => addParticipant('teams')}
-      />
+      <RequestMatrix side="dm" project={project} onChange={onChange} />
+      <RequestMatrix side="team" project={project} onChange={onChange} />
     </>
   )
 }
 
-function RequestMatrix({
-  kind,
-  rows,
-  columns,
-  project,
-  names,
-  scheduled,
-  onChange,
-  onEdit,
-  onDelete,
-  onAdd,
-}: {
-  kind: AskKind
-  rows: Participant[]
-  columns: Participant[]
-  project: Project
-  names: ReturnType<typeof useNames>
-  scheduled: Set<string>
-  onChange: Dispatch<SetStateAction<Project>>
-  onEdit: (id: string, text: string) => void
-  onDelete: (id: string) => void
-  onAdd: () => void
-}) {
-  const rowSide = kind === 'dm' ? 'DM' : 'team'
-  const addLabel = kind === 'dm' ? '+ DM' : '+ film team'
-  const asks = kind === 'dm' ? project.dmAsks : project.teamAsks
-  const longestHeader = Math.max(
-    0,
-    ...columns.map((person) => {
-      const display = names.get(person.id)
-      return Array.from([display?.tag, display?.code ?? person.name].filter(Boolean).join(' ')).length
-    }),
-  )
-  // A 45° label rises by roughly 0.7 of its width. Reserve only what the
-  // longest displayed label needs, plus room for the text below its guide.
+const rowLabel: Record<Side, string> = { dm: 'DM', team: 'team' }
+const addLabel: Record<Side, string> = { dm: '+ DM', team: '+ film team' }
+const placeholder: Record<Side, string> = { dm: 'Name | Organisation, Country', team: 'Film team' }
+
+/** One side's requests: its people down the rows, the other side across the columns. */
+function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
+  const names = useNames(project)
+  const rows = participants(project, side)
+  const columns = participants(project, otherSide(side))
+  const scheduled = new Set(project.meetings.map((m) => pairKey(m.team, m.dm)))
+  // A 45° label rises by roughly 0.7 of its width; reserve what the longest one needs.
+  const longestHeader = Math.max(0, ...columns.map((p) => names(p.id)).map(({ tag, code }) => Array.from(`${tag} ${code}`.trim()).length))
   const headerHeight = `${Math.max(5, 2.25 + longestHeader * 0.38)}rem`
 
   return (
@@ -120,13 +39,15 @@ function RequestMatrix({
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
               <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom whitespace-nowrap">
-                <Button variant="quiet" onClick={onAdd}>{addLabel}</Button>
+                <Button variant="quiet" onClick={() => onChange((p) => withNewParticipant(p, side))}>
+                  {addLabel[side]}
+                </Button>
               </th>
-              {columns.map((person) => (
-                <th key={person.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
+              {columns.map((p) => (
+                <th key={p.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
                   <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap">
                     <span className="inline-flex translate-y-full pl-2">
-                      <Name person={person} display={names.get(person.id)} side={kind === 'dm' ? 'team' : 'dm'} variant="code" />
+                      <Name who={names(p.id)} variant="code" />
                     </span>
                   </span>
                 </th>
@@ -134,45 +55,37 @@ function RequestMatrix({
             </tr>
           </thead>
           <tbody>
-            {rows.map((person, rowIndex) => (
+            {rows.map((person, i) => (
               <tr key={person.id} className="group h-6">
                 <th className="sticky left-0 z-10 w-px bg-paper px-2 py-0 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
-                  <EditableParticipant
-                    person={person}
-                    display={names.get(person.id)}
-                    side={kind === 'team' ? 'team' : 'dm'}
-                    variant={kind === 'team' ? 'code' : 'short'}
-                    label={`${rowSide} ${rowIndex + 1}`}
-                    placeholder={kind === 'dm' ? 'Name | Organisation, Country' : 'Film team'}
-                    onChange={(text) => onEdit(person.id, text)}
-                    onDelete={() => onDelete(person.id)}
+                  <RosterCell
+                    who={names(person.id)}
+                    variant={side === 'team' ? 'code' : 'short'}
+                    line={rosterLine(person)}
+                    label={`${rowLabel[side]} ${i + 1}`}
+                    placeholder={placeholder[side]}
+                    onChange={(line) => onChange((p) => withRosterLine(p, side, person.id, line))}
+                    onDelete={() => onChange((p) => withoutParticipant(p, side, person.id))}
                   />
                 </th>
                 {columns.map((column) => {
-                  const team = kind === 'dm' ? column.id : person.id
-                  const dm = kind === 'dm' ? person.id : column.id
-                  const requested = asked(asks, team, dm)
-                  const dmRequested = asked(project.dmAsks, team, dm)
-                  const teamRequested = asked(project.teamAsks, team, dm)
-                  const fulfilled = scheduled.has(pairKey(team, dm))
-                  const description = `${kind === 'dm' ? 'DM' : 'Team'} request: ${person.name} asks for ${column.name}`
+                  const pair = pairOf(side, person.id, column.id)
+                  const asked = asksFor(project, pair)
+                  const requested = asked.dm || asked.team
+                  const fulfilled = scheduled.has(pairKey(pair.team, pair.dm))
+                  const description = `${side === 'dm' ? 'DM' : 'Team'} request: ${person.name} asks for ${column.name}`
                   return (
                     <td key={column.id} className="p-0 group-hover:bg-canvas/50">
                       <button
                         type="button"
                         role="checkbox"
-                        aria-checked={requested}
+                        aria-checked={asked[side]}
                         aria-label={description}
-                        title={`${description} · ${requested ? fulfilled ? 'scheduled' : 'not scheduled' : 'not requested'}`}
-                        onClick={() => onChange((current) => withAsk(current, kind, team, dm, !requested))}
-                        className="flex h-6 w-full cursor-pointer items-center justify-center"
+                        title={`${description} · ${asked[side] ? (fulfilled ? 'scheduled' : 'not scheduled') : 'not requested'}`}
+                        onClick={() => onChange((p) => withAsk(p, side, pair.team, pair.dm, !asked[side]))}
+                        className={`flex h-6 w-full cursor-pointer items-center justify-center ${requested && !fulfilled ? 'opacity-45' : ''}`}
                       >
-                        <RequestMark
-                          dm={dmRequested}
-                          team={teamRequested}
-                          fulfilled={fulfilled}
-                          showEmpty
-                        />
+                        <RequestMark {...asked} />
                       </button>
                     </td>
                   )
@@ -186,42 +99,44 @@ function RequestMatrix({
   )
 }
 
-function EditableParticipant({
-  person,
-  display,
-  side,
+/**
+ * A row heading that edits the participant's roster line. The input holds the
+ * full line but shows it only while focused; at rest the short name sits on top
+ * of it, and an invisible copy of that name gives the cell its width.
+ */
+function RosterCell({
+  who,
   variant,
+  line,
   label,
   placeholder,
   onChange,
   onDelete,
 }: {
-  person: Participant
-  display?: DisplayName
-  side: 'dm' | 'team'
+  who: ParticipantName
   variant: 'short' | 'code'
+  line: string
   label: string
   placeholder: string
-  onChange: (text: string) => void
+  onChange: (line: string) => void
   onDelete: () => void
 }) {
-  const value = rosterText([person])
   return (
     <div className="relative flex h-6 items-center gap-0.5">
       <input
         aria-label={label}
-        className={`peer absolute inset-y-0 left-0 right-3 z-10 min-w-0 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${side === 'team' ? 'italic' : ''} ${value ? 'text-transparent' : 'text-muted'}`}
+        className={`peer absolute inset-y-0 left-0 right-3 z-10 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${sideStyle[who.side]} ${line ? 'text-transparent' : 'text-muted'}`}
         placeholder={placeholder}
-        title={value}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        title={line}
+        value={line}
+        onChange={(e) => onChange(e.target.value)}
       />
       <span aria-hidden="true" className="invisible flex">
-        <Name person={person} display={display} side={side} variant={variant} />
+        {line ? <Name who={who} variant={variant} /> : placeholder}
       </span>
-      {value && (
+      {line && (
         <span className="pointer-events-none absolute inset-y-0 left-0 right-3 flex items-center peer-focus:hidden">
-          <Name person={person} display={display} side={side} variant={variant} className="flex" />
+          <Name who={who} variant={variant} />
         </span>
       )}
       <button

@@ -134,10 +134,13 @@ index.html                 Vite entry
 src/main.tsx               mounts <App/>
 src/index.css              Tailwind + Public Sans import and the colour/font theme
 src/App.tsx                page layout, project history (undo/redo), localStorage autosave
-src/components/ui.tsx      shared pieces: Button, Panel, Name, AskPair
-src/components/Toolbar.tsx       clashes, undo / redo, save / export / open / new / sample
+src/components/ui.tsx      shared pieces: Button, RequestMark, Name
+src/components/useNames.ts       display names by participant id
+src/components/useAutoSolve.ts   re-solves in a Worker when the inputs change; reports progress
+src/components/Toolbar.tsx       solver progress, problems, undo / redo, save / export / open / new / sample
 src/components/SetupPanel.tsx    editable participant/request matrices
-src/components/BoardPanel.tsx    automatic solve, both board grids, cell inspector
+src/components/BoardPanel.tsx    both board grids and the selected cell
+src/components/Inspector.tsx     the selected cell: who is there and who could be
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
 src/lib/scheduler.ts       participants and availability, greedy selection, slot assignment (edge colouring), cell edits and their effects, stats, issues

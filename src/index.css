@@ -67,6 +67,11 @@
   color: var(--color-muted);
 }
 
+/* Both sides asked: the two request colours split diagonally. */
+@utility bg-request-both {
+  background: linear-gradient(135deg, var(--color-request-dm) 0 50%, var(--color-request-team) 50% 100%);
+}
+
 /* Match the cap height of uppercase monospace tags to the system UI font. */
 @utility font-mono-matched {
   font-family: var(--font-mono);

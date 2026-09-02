@@ -5,12 +5,24 @@
 // reordering them, or deleting one entry never shifts everybody else's
 // interest or meetings around. Ids come from one counter per project.
 
-import { availabilityOf, pairKey, type Asks, type Availability, type Id, type Participant, type PlacedMeeting, type Slot } from './scheduler'
+import {
+  asked,
+  availabilityOf,
+  pairKey,
+  type Asks,
+  type Availability,
+  type Id,
+  type Meeting,
+  type Participant,
+  type PlacedMeeting,
+  type Side,
+  type Slot,
+} from './scheduler'
 
 export const MAX_SLOTS = 60
 
 /** Whose asks: the decision makers' or the teams'. */
-export type AskKind = 'dm' | 'team'
+export type AskKind = Side
 
 export interface Project {
   /** Event and day, for printed running orders: "Baltic Sea Docs 2026 · Day 1, 10 September". */
@@ -99,9 +111,51 @@ export function parseNames(text: string): string[] {
   return parseRoster(text).map((e) => e.name)
 }
 
+/** One participant as a roster line: "Name = Code *". */
+export function rosterLine(p: Participant): string {
+  return `${p.name}${p.code ? ` = ${p.code}` : ''}${p.online ? ' *' : ''}`
+}
+
 /** The roster text for a list of participants (inverse of parseRoster). */
 export function rosterText(people: Participant[]): string {
-  return people.map((p) => `${p.name}${p.code ? ` = ${p.code}` : ''}${p.online ? ' *' : ''}`).join('\n')
+  return people.map(rosterLine).join('\n')
+}
+
+const listOf = (side: Side) => (side === 'team' ? 'teams' : 'dms')
+
+/** One side's participants, in roster order. */
+export function participants(project: Project, side: Side): Participant[] {
+  return project[listOf(side)]
+}
+
+/** Replace one participant's roster line ("Name | Org, Country = Code *"); id and availability stay. */
+export function withRosterLine(project: Project, side: Side, id: Id, line: string): Project {
+  const entry = parseRoster(line)[0] ?? { name: '', online: false }
+  const list = listOf(side)
+  return {
+    ...project,
+    [list]: project[list].map((p) => {
+      if (p.id !== id) return p
+      const next: Participant = { id, name: entry.name }
+      if (entry.online) next.online = true
+      if (entry.code) next.code = entry.code
+      if (p.unavailable?.length) next.unavailable = p.unavailable
+      return next
+    }),
+  }
+}
+
+/** Append an unnamed participant to one side. */
+export function withNewParticipant(project: Project, side: Side): Project {
+  const list = listOf(side)
+  const id = `${side === 'team' ? 't' : 'd'}${project.nextId}`
+  return { ...project, [list]: [...project[list], { id, name: '' }], nextId: project.nextId + 1 }
+}
+
+/** Remove a participant and every ask, meeting and availability mark that referred to them. */
+export function withoutParticipant(project: Project, side: Side, id: Id): Project {
+  const list = listOf(side)
+  return prune({ ...project, [list]: project[list].filter((p) => p.id !== id) })
 }
 
 export function withTitle(project: Project, title: string): Project {
@@ -299,6 +353,20 @@ export function prune(project: Project): Project {
 }
 
 export const asksField = (kind: AskKind): 'dmAsks' | 'teamAsks' => (kind === 'dm' ? 'dmAsks' : 'teamAsks')
+
+/** Who asked for a pair to meet. */
+export interface Asked {
+  dm: boolean
+  team: boolean
+}
+
+export function asksFor(project: Project, { team, dm }: Meeting): Asked {
+  return { dm: asked(project.dmAsks, team, dm), team: asked(project.teamAsks, team, dm) }
+}
+
+export function hasAsks(project: Project): boolean {
+  return Object.keys(project.dmAsks).length + Object.keys(project.teamAsks).length > 0
+}
 
 /** Record (or withdraw) one side's ask for a meeting. */
 export function withAsk(project: Project, kind: AskKind, teamId: Id, dmId: Id, wants: boolean): Project {

@@ -299,7 +299,12 @@ export function buildSchedule(input: ScheduleInput, { fillGaps = false } = {}): 
 }
 
 export type Side = 'team' | 'dm'
-const otherSide = (side: Side): Side => (side === 'team' ? 'dm' : 'team')
+export const otherSide = (side: Side): Side => (side === 'team' ? 'dm' : 'team')
+
+/** The pair with `own` on `side` and `partner` on the other. */
+export function pairOf(side: Side, own: Id, partner: Id): Meeting {
+  return side === 'dm' ? { team: partner, dm: own } : { team: own, dm: partner }
+}
 
 /**
  * What putting `partner` into `anchor`'s cell at `slot` would do:
@@ -335,9 +340,8 @@ export function assignEffect(
   if (!available(anchor, slot)) return { kind: 'unavailable', who: anchor }
   if (!available(partner, slot)) return { kind: 'unavailable', who: partner }
   const other = otherSide(side)
-  const pairOf = (a: Id, b: Id): Meeting => (side === 'dm' ? { dm: a, team: b } : { team: a, dm: b })
   const meetsElsewhere = (m: Meeting) => meetings.find((x) => x.team === m.team && x.dm === m.dm && x.slot !== slot)
-  const wanted = pairOf(anchor, partner)
+  const wanted = pairOf(side, anchor, partner)
   const already = meetsElsewhere(wanted)
   if (already) return { kind: 'repeat', ...wanted, at: already.slot }
   const current = meetings.find((m) => m.slot === slot && m[side] === anchor) ?? null
@@ -345,7 +349,7 @@ export function assignEffect(
   if (!busy) return { kind: 'free' }
   const displaced = busy[side]
   if (!current) return { kind: 'move', displaced }
-  const second = pairOf(displaced, current[other])
+  const second = pairOf(side, displaced, current[other])
   const secondAlready = meetsElsewhere(second)
   if (secondAlready) return { kind: 'repeat', ...second, at: secondAlready.slot }
   return { kind: 'swap', displaced, second }
@@ -376,7 +380,7 @@ export function assignCell(
     out.splice(clashIdx, 1)
     if (current) out.push({ ...clash, [other]: current[other] })
   }
-  out.push(side === 'dm' ? { slot, dm: anchor, team: partner } : { slot, team: anchor, dm: partner })
+  out.push({ ...pairOf(side, anchor, partner), slot })
   return out
 }
 
@@ -407,6 +411,11 @@ export function indexMeetings(meetings: PlacedMeeting[]): MeetingIndex {
     byPair.get(k)!.push(m)
   }
   return { byCell, byTeamSlot, byPair }
+}
+
+/** The meeting `id` (a team or a dm, per `side`) has at `slot`, if any. */
+export function meetingAt(index: MeetingIndex, side: Side, slot: Id, id: Id): PlacedMeeting | undefined {
+  return (side === 'dm' ? index.byCell : index.byTeamSlot).get(`${slot}|${id}`)
 }
 
 export type Issue =
