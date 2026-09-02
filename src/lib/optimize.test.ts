@@ -19,26 +19,16 @@ describe('optimize on the demo', () => {
     expect(ms).toBeLessThan(5000)
   })
 
-  test('dm-first is lexicographic in points: no candidate loses less DM interest', () => {
+  test('dm-first and fair are lexicographic: no candidate misses fewer DM asks, and the recommended board inherits that', () => {
     const candidates = candidateSelections(input)
-    const dmPoints = (o: ReturnType<typeof measure>) => 3 * o.missedMust + 2 * o.missedPriority + o.missedInterested
-    const dmFirst = dmPoints(measure(input, placeCompactly(candidates.find((c) => c.recipe === 'dm-first')!.meetings, input.slots)))
+    const missedDm = (recipe: string) => measure(input, placeCompactly(candidates.find((c) => c.recipe === recipe)!.meetings, input.slots)).missedDm
+    const best = missedDm('dm-first')
+    expect(missedDm('fair')).toBe(best)
     for (const c of candidates) {
-      expect(dmPoints(measure(input, placeCompactly(c.meetings, input.slots))), c.recipe).toBeGreaterThanOrEqual(dmFirst)
+      expect(measure(input, placeCompactly(c.meetings, input.slots)).missedDm, c.recipe).toBeGreaterThanOrEqual(best)
     }
-  })
-
-  test('tiered is lexicographic in tiers, and the recommended board inherits that', () => {
-    const candidates = candidateSelections(input)
-    const tiersOf = (o: ReturnType<typeof measure>) => [o.missedMust, o.missedPriority, o.missedInterested]
-    const tiered = tiersOf(measure(input, placeCompactly(candidates.find((c) => c.recipe === 'tiered')!.meetings, input.slots)))
-    const cmp = (a: number[], b: number[]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
-    for (const c of candidates) {
-      expect(cmp(tiersOf(measure(input, placeCompactly(c.meetings, input.slots))), tiered), c.recipe).toBeGreaterThanOrEqual(0)
-    }
-    // The frontier is sorted in objective order, so the first board misses no more of each tier than 'tiered' does.
-    const best = optimize(input)[0].objectives
-    expect(cmp(tiersOf(best), tiered)).toBe(0)
+    // The frontier is sorted in objective order, so the first board misses no more DM asks than 'dm-first' does.
+    expect(optimize(input)[0].objectives.missedDm).toBe(best)
   })
 
   test('compaction removes DM windows without changing meetings', () => {

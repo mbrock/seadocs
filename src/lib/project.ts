@@ -3,13 +3,14 @@
 //
 // Participants and slots have stable ids so that renaming the lists,
 // reordering them, or deleting one entry never shifts everybody else's
-// interest scores or meetings around. Ids come from one counter per project.
+// interest or meetings around. Ids come from one counter per project.
 
-import { availabilityOf, MAX_SCORE, pairKey, type Availability, type Id, type Participant, type PlacedMeeting, type Scores, type Slot } from './scheduler'
+import { availabilityOf, pairKey, type Asks, type Availability, type Id, type Participant, type PlacedMeeting, type Slot } from './scheduler'
 
 export const MAX_SLOTS = 60
 
-export type ScoreKind = 'dm' | 'team'
+/** Whose asks: the decision makers' or the teams'. */
+export type AskKind = 'dm' | 'team'
 
 export interface Project {
   /** Event and day, for printed running orders: "Baltic Sea Docs 2026 · Day 1, 10 September". */
@@ -18,8 +19,8 @@ export interface Project {
   dms: Participant[]
   /** In time order. Labels may be empty; slotLabel() fills them in. */
   slots: Slot[]
-  dmScores: Scores
-  teamScores: Scores
+  dmAsks: Asks
+  teamAsks: Asks
   meetings: PlacedMeeting[]
   nextId: number
 }
@@ -31,8 +32,8 @@ export function emptyProject(): Project {
       teams: [],
       dms: [],
       slots: [],
-      dmScores: {},
-      teamScores: {},
+      dmAsks: {},
+      teamAsks: {},
       meetings: [],
       nextId: 1,
     },
@@ -110,7 +111,7 @@ export function participantName(project: Project, id: Id): string {
   return p ? p.name : id
 }
 
-/** Replace the participant lists, keeping ids (and so scores) for names that still exist. */
+/** Replace the participant lists, keeping ids (and so asks) for names that still exist. */
 export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): Project {
   const counter = { next: project.nextId }
   const entry = (e: RosterEntry | string): RosterEntry => (typeof e === 'string' ? { name: e, online: false } : e)
@@ -174,7 +175,7 @@ export function withSlots(project: Project, labels: string[]): Project {
   return withSlotLabels(withSlotCount(project, Math.max(1, labels.length)), labels)
 }
 
-/** Drop scores, meetings and availability marks that refer to participants or slots that no longer exist. */
+/** Drop asks, meetings and availability marks that refer to participants or slots that no longer exist. */
 export function prune(project: Project): Project {
   const teamIds = new Set(project.teams.map((t) => t.id))
   const dmIds = new Set(project.dms.map((d) => d.id))
@@ -186,41 +187,44 @@ export function prune(project: Project): Project {
     const { unavailable: _drop, ...clean } = p
     return unavailable.length ? { ...clean, unavailable } : clean
   }
-  const keep = (scores: Scores): Scores =>
+  const keep = (asks: Asks): Asks =>
     Object.fromEntries(
-      Object.entries(scores).filter(([k, v]) => {
-        const [t, d] = k.split('|')
-        return v > 0 && teamIds.has(t) && dmIds.has(d)
-      }),
+      Object.keys(asks)
+        .filter((k) => {
+          const [t, d] = k.split('|')
+          return teamIds.has(t) && dmIds.has(d)
+        })
+        .map((k) => [k, true]),
     )
   const meetings = project.meetings.filter((m) => teamIds.has(m.team) && dmIds.has(m.dm) && slotIds.has(m.slot))
   return {
     ...project,
     teams: project.teams.map(keepSlots),
     dms: project.dms.map(keepSlots),
-    dmScores: keep(project.dmScores),
-    teamScores: keep(project.teamScores),
+    dmAsks: keep(project.dmAsks),
+    teamAsks: keep(project.teamAsks),
     meetings,
   }
 }
 
-export function withScore(project: Project, kind: ScoreKind, teamId: Id, dmId: Id, score: number): Project {
-  const field = kind === 'dm' ? 'dmScores' : 'teamScores'
-  const scores = { ...project[field] }
+export const asksField = (kind: AskKind): 'dmAsks' | 'teamAsks' => (kind === 'dm' ? 'dmAsks' : 'teamAsks')
+
+/** Record (or withdraw) one side's ask for a meeting. */
+export function withAsk(project: Project, kind: AskKind, teamId: Id, dmId: Id, wants: boolean): Project {
+  const field = asksField(kind)
+  const asks = { ...project[field] }
   const k = pairKey(teamId, dmId)
-  if (score > 0) scores[k] = score
-  else delete scores[k]
-  return { ...project, [field]: scores }
+  if (wants) asks[k] = true
+  else delete asks[k]
+  return { ...project, [field]: asks }
 }
 
-export function cycleScore(project: Project, kind: ScoreKind, teamId: Id, dmId: Id): Project {
-  const field = kind === 'dm' ? 'dmScores' : 'teamScores'
-  const cur = project[field][pairKey(teamId, dmId)] || 0
-  return withScore(project, kind, teamId, dmId, (cur + 1) % (MAX_SCORE + 1))
+export function toggleAsk(project: Project, kind: AskKind, teamId: Id, dmId: Id): Project {
+  return withAsk(project, kind, teamId, dmId, !(pairKey(teamId, dmId) in project[asksField(kind)]))
 }
 
-export function withScores(project: Project, dmScores: Scores, teamScores: Scores): Project {
-  return prune({ ...project, dmScores, teamScores })
+export function withAsks(project: Project, dmAsks: Asks, teamAsks: Asks): Project {
+  return prune({ ...project, dmAsks, teamAsks })
 }
 
 export function withMeetings(project: Project, meetings: PlacedMeeting[]): Project {

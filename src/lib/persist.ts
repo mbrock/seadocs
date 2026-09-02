@@ -6,16 +6,21 @@
 //       list position, board as a slot × dm matrix of team indices
 //   v2  participants with ids, `slotCount` + `slotLabels`, meetings with slot
 //       positions
-//   v3  slots are entities with ids; meetings refer to slot ids
+//   v3  slots are entities with ids; meetings refer to slot ids; interest as
+//       0–3 scores (`dmScores`, `teamScores`)
+//   v4  interest is either/or: `dmAsks` and `teamAsks` are lists of pair keys.
+//       Any v1–v3 score above zero becomes an ask.
 
-import { MAX_SCORE, pairKey, type Participant, type PlacedMeeting, type Scores, type Slot } from './scheduler'
+import { pairKey, type Asks, type Participant, type PlacedMeeting, type Slot } from './scheduler'
 import { emptyProject, prune, type Project } from './project'
 
-export const FORMAT_VERSION = 3
+export const FORMAT_VERSION = 4
 export const STORAGE_KEY = 'meeting-board/project'
 
 export function serialize(project: Project): string {
-  return JSON.stringify({ version: FORMAT_VERSION, savedAt: new Date().toISOString(), ...project }, null, 1)
+  const { dmAsks, teamAsks, ...rest } = project
+  const file = { version: FORMAT_VERSION, savedAt: new Date().toISOString(), ...rest, dmAsks: Object.keys(dmAsks).sort(), teamAsks: Object.keys(teamAsks).sort() }
+  return JSON.stringify(file, null, 1)
 }
 
 export function deserialize(text: string): Project {
@@ -30,6 +35,7 @@ export function deserialize(text: string): Project {
   return d.version === 2 ? fromV2(d) : fromV3(d)
 }
 
+/** v3 and v4 differ only in how interest is stored. */
 function fromV3(d: Record<string, unknown>): Project {
   const slots = Array.isArray(d.slots) ? d.slots.filter(isSlot).map(({ id, label }) => ({ id, label })) : []
   return prune({
@@ -38,8 +44,8 @@ function fromV3(d: Record<string, unknown>): Project {
     teams: (d.teams as Participant[]).map(cleanParticipant),
     dms: (d.dms as Participant[]).map(cleanParticipant),
     slots: slots.length ? slots : emptyProject().slots,
-    dmScores: cleanScores(d.dmScores),
-    teamScores: cleanScores(d.teamScores),
+    dmAsks: cleanAsks(d.dmAsks ?? d.dmScores),
+    teamAsks: cleanAsks(d.teamAsks ?? d.teamScores),
     meetings: Array.isArray(d.meetings) ? d.meetings.filter(isMeeting) : [],
     nextId: Number(d.nextId) || 1,
   })
@@ -68,8 +74,8 @@ function fromV2(d: Record<string, unknown>): Project {
     teams: (d.teams as Participant[]).map(cleanParticipant),
     dms: (d.dms as Participant[]).map(cleanParticipant),
     slots,
-    dmScores: cleanScores(d.dmScores),
-    teamScores: cleanScores(d.teamScores),
+    dmAsks: cleanAsks(d.dmScores),
+    teamAsks: cleanAsks(d.teamScores),
     meetings,
     nextId,
   })
@@ -79,13 +85,12 @@ function fromV1(d: Record<string, unknown>): Project {
   const teams: Participant[] = (d.teams as unknown[]).map((name, i) => ({ id: `t${i + 1}`, name: String(name) }))
   const dms: Participant[] = (d.dms as unknown[]).map((name, i) => ({ id: `d${i + 1}`, name: String(name) }))
   const { slots, nextId } = slotsFromCount(d.slotCount, d.slotLabels, teams.length + dms.length + 1)
-  const convert = (scores: unknown): Scores => {
-    const out: Scores = {}
+  const convert = (scores: unknown): Asks => {
+    const out: Asks = {}
     if (!isRecord(scores)) return out
     for (const [k, v] of Object.entries(scores)) {
       const [ti, di] = k.split('_').map(Number)
-      const n = Number(v)
-      if (teams[ti] && dms[di] && n > 0) out[pairKey(teams[ti].id, dms[di].id)] = Math.min(MAX_SCORE, n)
+      if (teams[ti] && dms[di] && Number(v) > 0) out[pairKey(teams[ti].id, dms[di].id)] = true
     }
     return out
   }
@@ -103,8 +108,8 @@ function fromV1(d: Record<string, unknown>): Project {
     teams,
     dms,
     slots,
-    dmScores: convert(d.dmScores),
-    teamScores: convert(d.teamScores),
+    dmAsks: convert(d.dmScores),
+    teamAsks: convert(d.teamScores),
     meetings,
     nextId,
   })
@@ -134,12 +139,13 @@ function isMeeting(m: unknown): m is PlacedMeeting {
   return isRecord(m) && typeof m.team === 'string' && typeof m.dm === 'string' && typeof m.slot === 'string'
 }
 
-function cleanScores(scores: unknown): Scores {
-  if (!isRecord(scores)) return {}
-  const out: Scores = {}
-  for (const [k, v] of Object.entries(scores)) {
-    const n = Number(v)
-    if (n >= 1 && n <= MAX_SCORE) out[k] = Math.floor(n)
+/** v4 lists pair keys; v3 mapped pair keys to scores, where anything above zero was an ask. */
+function cleanAsks(x: unknown): Asks {
+  const out: Asks = {}
+  if (Array.isArray(x)) {
+    for (const k of x) if (typeof k === 'string' && k.includes('|')) out[k] = true
+  } else if (isRecord(x)) {
+    for (const [k, v] of Object.entries(x)) if (Number(v) > 0) out[k] = true
   }
   return out
 }

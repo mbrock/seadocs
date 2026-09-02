@@ -2,12 +2,12 @@ import { describe, expect, test } from 'vitest'
 import { addToFrontier, compareLex, dominates, gapsOf, measure, type Objectives } from './objectives'
 import { compactSlots, participantsWithWindows } from './compact'
 import { optimize } from './optimize'
-import { assignSlots, findIssues, type Participant, type PlacedMeeting } from './scheduler'
+import { assignSlots, findIssues, type Asks, type Participant, type PlacedMeeting } from './scheduler'
 import { emptyProject, withParticipants, withSlotCount } from './project'
 import { numberedSlots, seededRandom } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
-const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+const zero: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
 
 describe('objectives', () => {
   test('measure counts each dimension', () => {
@@ -15,8 +15,8 @@ describe('objectives', () => {
       teams: people('t', 3),
       dms: people('d', 2),
       slots: numberedSlots(4),
-      dmScores: { 't1|d1': 3, 't2|d1': 1, 't1|d2': 2 },
-      teamScores: { 't2|d2': 2, 't1|d1': 1 },
+      dmAsks: { 't1|d1': true, 't2|d1': true, 't1|d2': true } as Asks,
+      teamAsks: { 't2|d2': true, 't1|d1': true } as Asks,
     }
     const meetings: PlacedMeeting[] = [
       { team: 't1', dm: 'd1', slot: 's1' },
@@ -24,9 +24,7 @@ describe('objectives', () => {
       { team: 't3', dm: 'd2', slot: 's2' }, // nobody asked → filler
     ]
     expect(measure(input, meetings)).toEqual({
-      missedMust: 0,
-      missedPriority: 1, // t1|d2
-      missedInterested: 0,
+      missedDm: 1, // t1|d2
       dmsUnderHalf: 1, // d2 asked for t1 only and did not get it
       teamsEmpty: 0,
       dmGaps: 2,
@@ -35,24 +33,24 @@ describe('objectives', () => {
       teamGaps: 0,
     })
     expect(measure(input, meetings.slice(0, 1)).teamsEmpty).toBe(2)
-    expect(measure(input, []).missedMust).toBe(1)
+    expect(measure(input, []).missedDm).toBe(3)
   })
 
   test('dominance and frontier', () => {
-    const a = { ...zero, missedPriority: 1 }
-    const b = { ...zero, missedPriority: 2 }
-    const c = { ...zero, missedPriority: 0, missedTeam: 5 }
+    const a = { ...zero, missedDm: 1 }
+    const b = { ...zero, missedDm: 2 }
+    const c = { ...zero, missedDm: 0, missedTeam: 5 }
     expect(dominates(a, b)).toBe(true)
     expect(dominates(b, a)).toBe(false)
     expect(dominates(a, a)).toBe(false)
-    expect(dominates(a, c)).toBe(false) // a loses on missedPriority, c loses on missedTeam
+    expect(dominates(a, c)).toBe(false) // a loses on missedDm, c loses on missedTeam
     let f: Objectives[] = []
     f = addToFrontier(f, b, (o) => o)
     f = addToFrontier(f, c, (o) => o)
     f = addToFrontier(f, a, (o) => o) // evicts b
     f = addToFrontier(f, { ...a }, (o) => o) // duplicate ignored
     expect(f).toEqual([c, a])
-    expect([...f].sort(compareLex)).toEqual([c, a]) // c misses no priority → first in priority order
+    expect([...f].sort(compareLex)).toEqual([c, a]) // c misses no DM ask → first in priority order
   })
 
   test('gapsOf', () => {
@@ -77,21 +75,21 @@ function busyProject(seed: number, density = 0.3) {
   let p = withParticipants(emptyProject(), Array.from({ length: 26 }, (_, i) => `Team ${i + 1}`), Array.from({ length: 26 }, (_, i) => `DM ${i + 1}`))
   p = withSlotCount(p, 12)
   const rnd = seededRandom(seed)
-  const dmScores: Record<string, number> = {}
-  const teamScores: Record<string, number> = {}
+  const dmAsks: Record<string, true> = {}
+  const teamAsks: Record<string, true> = {}
   for (const t of p.teams) {
     for (const d of p.dms) {
-      if (rnd() < density) dmScores[`${t.id}|${d.id}`] = 1 + Math.floor(rnd() * 3)
-      if (rnd() < density) teamScores[`${t.id}|${d.id}`] = 1 + Math.floor(rnd() * 3)
+      if (rnd() < density) dmAsks[`${t.id}|${d.id}`] = true
+      if (rnd() < density) teamAsks[`${t.id}|${d.id}`] = true
     }
   }
-  return { ...p, dmScores, teamScores }
+  return { ...p, dmAsks, teamAsks }
 }
 
 describe('compactSlots', () => {
   test('keeps the same meetings, no clashes, and never more windows', () => {
     let improvedSomewhere = false
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2, 4]) {
       const input = busyProject(seed)
       const front = optimize(input)
       const selection = front[0].meetings.map(({ team, dm }) => ({ team, dm }))

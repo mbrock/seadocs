@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { emptyProject, parseNames, withParticipants, withSlots, withSlotCount, cycleScore, slotLabel } from './project'
+import { emptyProject, parseNames, withParticipants, withSlots, withSlotCount, toggleAsk, slotLabel } from './project'
 import { deserialize, serialize } from './persist'
 import { demoProject } from './fixtures'
 import { pairKey } from './scheduler'
@@ -8,31 +8,30 @@ test('parseNames trims, drops blanks and duplicates', () => {
   expect(parseNames(' A \n\nB\nA\n  ')).toEqual(['A', 'B'])
 })
 
-test('withParticipants keeps ids for names that survive, so scores survive too', () => {
+test('withParticipants keeps ids for names that survive, so asks survive too', () => {
   let p = withParticipants(emptyProject(), ['Alpha', 'Beta'], ['Fund X'])
   const alpha = p.teams[0].id
   const fund = p.dms[0].id
-  p = cycleScore(p, 'dm', alpha, fund)
-  p = cycleScore(p, 'dm', alpha, fund)
-  expect(p.dmScores[pairKey(alpha, fund)]).toBe(2)
+  p = toggleAsk(p, 'dm', alpha, fund)
+  expect(p.dmAsks[pairKey(alpha, fund)]).toBe(true)
 
-  // Remove Beta, add Gamma, reorder: Alpha keeps its id and score.
+  // Remove Beta, add Gamma, reorder: Alpha keeps its id and ask.
   p = withParticipants(p, ['Gamma', 'Alpha'], ['Fund X'])
   expect(p.teams[1].id).toBe(alpha)
-  expect(p.dmScores[pairKey(alpha, fund)]).toBe(2)
+  expect(p.dmAsks[pairKey(alpha, fund)]).toBe(true)
   expect(p.teams[0].id).not.toBe(alpha)
   expect(p.teams).toHaveLength(2)
 })
 
-test('withParticipants prunes scores and meetings for removed people', () => {
+test('withParticipants prunes asks and meetings for removed people', () => {
   let p = withParticipants(emptyProject(), ['A', 'B'], ['X'])
   const [a, b] = p.teams.map((t) => t.id)
   const x = p.dms[0].id
   const [s1, s2] = p.slots.map((s) => s.id)
-  p = cycleScore(p, 'dm', b, x)
+  p = toggleAsk(p, 'dm', b, x)
   p = { ...p, meetings: [{ team: b, dm: x, slot: s1 }, { team: a, dm: x, slot: s2 }] }
   p = withParticipants(p, ['A'], ['X'])
-  expect(p.dmScores).toEqual({})
+  expect(p.dmAsks).toEqual({})
   expect(p.meetings).toEqual([{ team: a, dm: x, slot: s2 }])
 })
 
@@ -57,22 +56,20 @@ test('slots keep their ids when the count changes; meetings in dropped slots go'
   expect(withSlots(p, []).slots).toHaveLength(1)
 })
 
-test('cycleScore wraps 0→1→2→3→0 and removes zero entries', () => {
+test('toggleAsk switches an ask on and off, leaving no entry when off', () => {
   let p = withParticipants(emptyProject(), ['A'], ['X'])
   const k = pairKey(p.teams[0].id, p.dms[0].id)
-  for (const expected of [1, 2, 3]) {
-    p = cycleScore(p, 'team', p.teams[0].id, p.dms[0].id)
-    expect(p.teamScores[k]).toBe(expected)
-  }
-  p = cycleScore(p, 'team', p.teams[0].id, p.dms[0].id)
-  expect(k in p.teamScores).toBe(false)
+  p = toggleAsk(p, 'team', p.teams[0].id, p.dms[0].id)
+  expect(p.teamAsks[k]).toBe(true)
+  p = toggleAsk(p, 'team', p.teams[0].id, p.dms[0].id)
+  expect(k in p.teamAsks).toBe(false)
 })
 
 test('serialize/deserialize round-trips', () => {
   const p = demoProject(3)
   const back = deserialize(serialize(p))
   expect(back).toEqual(p)
-  expect(JSON.parse(serialize(p)).version).toBe(3)
+  expect(JSON.parse(serialize(p)).version).toBe(4)
 })
 
 test('deserialize reads v2 files (slotCount + slotLabels, meetings by slot position)', () => {
@@ -91,7 +88,7 @@ test('deserialize reads v2 files (slotCount + slotLabels, meetings by slot posit
   const p = deserialize(JSON.stringify(v2))
   expect(p.slots.map((s) => s.label)).toEqual(['09:00', '09:20', ''])
   expect(p.meetings).toEqual([{ team: 't1', dm: 'd2', slot: p.slots[1].id }])
-  expect(p.dmScores['t1|d2']).toBe(2)
+  expect(p.dmAsks['t1|d2']).toBe(true)
   // Slot ids come from the same counter as everything else and don't collide.
   expect(new Set([...p.teams, ...p.dms, ...p.slots].map((x) => x.id)).size).toBe(5)
   expect(p.nextId).toBe(6)
@@ -116,9 +113,9 @@ test('deserialize reads v1 files from the original prototype', () => {
   const [a, b] = p.teams.map((t) => t.id)
   const [d1, d2] = p.dms.map((d) => d.id)
   const [s1] = p.slots.map((s) => s.id)
-  expect(p.dmScores[pairKey(a, d2)]).toBe(3)
-  expect(p.dmScores[pairKey(b, d1)]).toBe(1)
-  expect(p.teamScores[pairKey(b, d2)]).toBe(2)
+  expect(p.dmAsks[pairKey(a, d2)]).toBe(true)
+  expect(p.dmAsks[pairKey(b, d1)]).toBe(true)
+  expect(p.teamAsks[pairKey(b, d2)]).toBe(true)
   expect(p.meetings).toEqual([
     { team: b, dm: d1, slot: s1 },
     { team: a, dm: d2, slot: s1 },

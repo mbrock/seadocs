@@ -20,7 +20,6 @@ import {
   alwaysAvailable,
   assignSlots,
   availabilityOf,
-  MAX_SCORE,
   selectMeetings,
   type Availability,
   type Meeting,
@@ -37,21 +36,17 @@ export interface Alternative {
 }
 
 /**
- * Relative worth of one point of decision-maker vs team interest. 'dm-first'
- * is lexicographic in points: its DM weight exceeds the sum of ALL team
- * scores, so no amount of team interest can buy back a single DM point.
- * 'tiered' goes further and is lexicographic in tiers: one must-meet outweighs
- * every priority, one priority every "interested", and those every team ask —
- * exactly the objective order — so the board it finds provably minimises
- * missed must-meets, then missed priorities, then missed "interested".
- * 'fair' is tiered too, but ranks team asks BELOW the solver's fair-share
- * tie-break: among boards equally good for the decision makers as a group, it
- * spreads meetings by how much each one asked for, and only then listens to
- * the teams. The other weightings let team asks buy DM points.
+ * Relative worth of a decision-maker ask vs a team ask. 'dm-first' is
+ * lexicographic: its DM weight exceeds the number of ALL team asks, so no
+ * amount of team interest can buy back a single DM ask — exactly the objective
+ * order, so the board it finds provably meets the most DM asks. 'fair' is
+ * dm-first too, but ranks team asks BELOW the solver's fair-share tie-break:
+ * among boards equally good for the decision makers as a group, it spreads
+ * meetings by how much each one asked for, and only then listens to the
+ * teams. The other weightings let team asks buy DM asks.
  */
-const WEIGHTINGS: [string, number | 'lexicographic' | 'tiered' | 'fair', number][] = [
+const WEIGHTINGS: [string, number | 'lexicographic' | 'fair', number][] = [
   ['fair', 'fair', 0],
-  ['tiered', 'tiered', 1],
   ['dm-first', 'lexicographic', 1],
   ['dm-leaning', 3, 1],
   ['balanced', 1, 1],
@@ -79,21 +74,19 @@ export function candidateSelections(input: ScheduleInput): { recipe: string; mee
   add('greedy', selectMeetings(input))
   add('greedy+fill', selectMeetings({ ...input, fillGaps: true }))
   const pairs = allPairs(input)
-  const totalTeamScore = pairs.reduce((sum, p) => sum + p.teamScore, 0)
-  // Tier weights: each tier is worth more than every pair of the tier below put together.
-  const tier: number[] = [0, totalTeamScore + 1]
-  for (let s = 2; s <= MAX_SCORE; s++) tier[s] = tier[s - 1] * (pairs.length + 1)
+  const totalTeamAsks = pairs.filter((p) => p.teamAsked).length
+  // A requested pair is worth at least REQUESTED; a filler is worth 1, so
+  // fillers only ever use capacity nothing requested could use.
+  const REQUESTED = pairs.length + 1
   for (const [name, dmWeight, wTeam] of WEIGHTINGS) {
+    const wDm = dmWeight === 'lexicographic' || dmWeight === 'fair' ? totalTeamAsks + 1 : dmWeight
     for (const floor of [0, 1]) {
       for (const fill of [false, true]) {
-        // Requested pairs are worth at least 1000; a filler is worth 1, so
-        // fillers only ever use capacity nothing requested could use.
-        const points = (dm: number, team: number) =>
-          dmWeight === 'tiered' || dmWeight === 'fair'
-            ? tier[dm] + wTeam * team
-            : (dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight) * dm + wTeam * team
-        const weight = (dm: number, team: number) => 1000 * points(dm, team) + (fill ? 1 : 0)
-        const tieBreak = dmWeight === 'fair' ? (_dm: number, team: number) => team : undefined
+        const points = (dm: boolean, team: boolean) => (dm ? wDm : 0) + (team ? wTeam : 0)
+        // Under 'fair' a team ask adds nothing to a DM-asked pair (so fair share
+        // decides between DM asks) but a team-only ask still outranks a filler.
+        const weight = (dm: boolean, team: boolean) => REQUESTED * points(dm, team) + (dmWeight === 'fair' && team && !dm ? 1 : 0) + (fill ? 1 : 0)
+        const tieBreak = dmWeight === 'fair' ? (_dm: boolean, team: boolean) => (team ? 1 : 0) : undefined
         add(`${name}${floor ? ` floor${floor}` : ''}${fill ? ' fill' : ''}`, selectByFlow(input, { weight, teamFloor: floor, tieBreak }))
       }
     }

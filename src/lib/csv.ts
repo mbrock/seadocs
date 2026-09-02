@@ -1,5 +1,5 @@
-import { indexMeetings, scoreOf } from './scheduler'
-import { participantName, slotLabel, tableLabel, type Project, type ScoreKind } from './project'
+import { asked, indexMeetings } from './scheduler'
+import { participantName, slotLabel, tableLabel, type AskKind, type Project } from './project'
 
 function csv(rows: string[][]): string {
   return rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -22,14 +22,14 @@ export function boardCsv(project: Project): string {
 }
 
 /**
- * One side's asks as a grid: rows = decision makers, columns = teams, cells
- * 0–3 (blank for 0). Fill it in a spreadsheet and paste it back into Interest.
+ * One side's asks as a grid: rows = decision makers, columns = teams, an x
+ * where there is an ask. Fill it in a spreadsheet and paste it back into Interest.
  */
-export function interestCsv(project: Project, kind: ScoreKind): string {
-  const scores = kind === 'dm' ? project.dmScores : project.teamScores
-  const rows = [[kind === 'dm' ? 'Decision maker asks (0–3)' : 'Team asks (0–3)', ...project.teams.map((t) => t.name)]]
+export function interestCsv(project: Project, kind: AskKind): string {
+  const asks = kind === 'dm' ? project.dmAsks : project.teamAsks
+  const rows = [[kind === 'dm' ? 'Decision maker asks' : 'Team asks', ...project.teams.map((t) => t.name)]]
   for (const d of project.dms) {
-    rows.push([d.name, ...project.teams.map((t) => String(scoreOf(scores, t.id, d.id) || ''))])
+    rows.push([d.name, ...project.teams.map((t) => (asked(asks, t.id, d.id) ? 'x' : ''))])
   }
   return csv(rows)
 }

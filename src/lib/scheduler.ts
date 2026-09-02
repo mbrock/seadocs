@@ -50,11 +50,12 @@ export function availableCounts(people: Participant[], slots: Slot[]): Map<Id, n
   return new Map(people.map((p) => [p.id, slots.length - (p.unavailable ?? []).filter((s) => ids.has(s)).length]))
 }
 
-/** 0 = none, 1 = interested, 2 = priority, 3 = must-meet */
-export type Score = 0 | 1 | 2 | 3
-
-/** pairKey(team, dm) -> score. Zero scores are simply absent. */
-export type Scores = Record<string, number>
+/**
+ * The meetings one side asked for: pairKey(team, dm) -> true. Interest is
+ * either/or — a decision maker either wants to meet a team or has not said so;
+ * there are no grades. Not asked = absent.
+ */
+export type Asks = Record<string, true>
 
 export interface Meeting {
   team: Id
@@ -74,27 +75,26 @@ export interface PlacedMeeting extends Meeting {
 export interface Pair extends Meeting {
   ti: number
   di: number
-  dmScore: number
-  teamScore: number
+  /** The decision maker asked to meet this team. */
+  dmAsked: boolean
+  /** The team asked to meet this decision maker. */
+  teamAsked: boolean
 }
 
 export interface ScheduleInput {
   teams: Participant[]
   dms: Participant[]
-  dmScores: Scores
-  teamScores: Scores
+  dmAsks: Asks
+  teamAsks: Asks
   slots: Slot[]
 }
-
-export const MAX_SCORE = 3
-export const SCORE_LABELS = ['none', 'interested', 'priority', 'must-meet'] as const
 
 export function pairKey(teamId: Id, dmId: Id): string {
   return `${teamId}|${dmId}`
 }
 
-export function scoreOf(scores: Scores, teamId: Id, dmId: Id): number {
-  return scores[pairKey(teamId, dmId)] || 0
+export function asked(asks: Asks, teamId: Id, dmId: Id): boolean {
+  return pairKey(teamId, dmId) in asks
 }
 
 /** Slot id -> position, for algorithms that reason about order. */
@@ -102,8 +102,8 @@ export function slotIndex(slots: Slot[]): Map<Id, number> {
   return new Map(slots.map((s, i) => [s.id, i]))
 }
 
-/** Every team × dm pair with both scores attached, in list order. */
-export function allPairs({ teams, dms, dmScores, teamScores }: Omit<ScheduleInput, 'slots'>): Pair[] {
+/** Every team × dm pair with both sides' asks attached, in list order. */
+export function allPairs({ teams, dms, dmAsks, teamAsks }: Omit<ScheduleInput, 'slots'>): Pair[] {
   const pairs: Pair[] = []
   teams.forEach((t, ti) => {
     dms.forEach((d, di) => {
@@ -112,23 +112,26 @@ export function allPairs({ teams, dms, dmScores, teamScores }: Omit<ScheduleInpu
         dm: d.id,
         ti,
         di,
-        dmScore: scoreOf(dmScores, t.id, d.id),
-        teamScore: scoreOf(teamScores, t.id, d.id),
+        dmAsked: asked(dmAsks, t.id, d.id),
+        teamAsked: asked(teamAsks, t.id, d.id),
       })
     })
   })
   return pairs
 }
 
-/** Higher rank = should be scheduled first. DM interest dominates, team interest breaks ties. */
+/**
+ * Higher rank = should be scheduled first: 3 both asked, 2 only the decision
+ * maker, 1 only the team, 0 nobody. Decision-maker interest dominates.
+ */
 export function rankOf(pair: Pair): number {
-  return pair.dmScore * (MAX_SCORE + 1) + pair.teamScore
+  return (pair.dmAsked ? 2 : 0) + (pair.teamAsked ? 1 : 0)
 }
 
 /**
  * Decide which meetings should happen.
  *
- * Requested pairs (either side scored > 0) are taken in tiers of descending
+ * Requested pairs (either side asked) are taken in tiers of descending
  * rank. Within a tier, the pair whose team (then dm) has the fewest meetings
  * so far is taken first, so equal interest is spread fairly instead of by
  * list order. A pair is skipped once either participant already has as many
@@ -441,55 +444,13 @@ export interface Stats {
   meetings: number
   /** The most meetings any board could hold: the smaller side × slots. */
   capacity: number
-  dmRequested: number
-  dmSatisfied: number
-  mustMeetRequested: number
-  mustMeetSatisfied: number
-  teamRequested: number
-  teamSatisfied: number
-  teamOnlyHonoured: number
-  unrequestedPlaced: number
-  teamsWithoutMeetings: number
   /** Requested pairs that did not get a meeting, strongest first. */
   unmet: Pair[]
 }
 
 export function computeStats(input: ScheduleInput, meetings: PlacedMeeting[]): Stats {
   const { byPair } = indexMeetings(meetings)
-  const stats: Stats = {
-    meetings: meetings.length,
-    capacity: Math.min(input.dms.length, input.teams.length) * input.slots.length,
-    dmRequested: 0,
-    dmSatisfied: 0,
-    mustMeetRequested: 0,
-    mustMeetSatisfied: 0,
-    teamRequested: 0,
-    teamSatisfied: 0,
-    teamOnlyHonoured: 0,
-    unrequestedPlaced: 0,
-    teamsWithoutMeetings: 0,
-    unmet: [],
-  }
-  for (const p of allPairs(input)) {
-    const met = byPair.has(pairKey(p.team, p.dm))
-    if (p.dmScore > 0) {
-      stats.dmRequested++
-      if (met) stats.dmSatisfied++
-    }
-    if (p.dmScore === MAX_SCORE) {
-      stats.mustMeetRequested++
-      if (met) stats.mustMeetSatisfied++
-    }
-    if (p.teamScore > 0) {
-      stats.teamRequested++
-      if (met) stats.teamSatisfied++
-    }
-    if (met && p.dmScore === 0 && p.teamScore > 0) stats.teamOnlyHonoured++
-    if (met && p.dmScore === 0 && p.teamScore === 0) stats.unrequestedPlaced++
-    if (!met && rankOf(p) > 0) stats.unmet.push(p)
-  }
-  stats.unmet.sort((a, b) => rankOf(b) - rankOf(a) || a.di - b.di || a.ti - b.ti)
-  const teamsMet = new Set(meetings.map((m) => m.team))
-  stats.teamsWithoutMeetings = input.teams.filter((t) => !teamsMet.has(t.id)).length
-  return stats
+  const unmet = allPairs(input).filter((p) => rankOf(p) > 0 && !byPair.has(pairKey(p.team, p.dm)))
+  unmet.sort((a, b) => rankOf(b) - rankOf(a) || a.di - b.di || a.ti - b.ti)
+  return { meetings: meetings.length, capacity: Math.min(input.dms.length, input.teams.length) * input.slots.length, unmet }
 }

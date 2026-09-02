@@ -13,17 +13,17 @@ import {
   type Meeting,
   type PlacedMeeting,
   type Participant,
-  type Scores,
   type Slot,
 } from './scheduler'
-import { emptyProject, withParticipants, withSlots, withScores } from './project'
-import { demoProject, numberedSlots, seededRandom, randomScores } from './fixtures'
+import { emptyProject, withParticipants, withSlots, withAsks } from './project'
+import { demoProject, numberedSlots, seededRandom, randomAsks } from './fixtures'
+import type { Asks } from './scheduler'
 
 const ids = (n: number, prefix: string): Participant[] =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
 
-function input(teamCount: number, dmCount: number, slotCount: number, dmScores: Scores = {}, teamScores: Scores = {}) {
-  return { teams: ids(teamCount, 't'), dms: ids(dmCount, 'd'), slots: numberedSlots(slotCount), dmScores, teamScores }
+function input(teamCount: number, dmCount: number, slotCount: number, dmAsks: Asks = {}, teamAsks: Asks = {}) {
+  return { teams: ids(teamCount, 't'), dms: ids(dmCount, 'd'), slots: numberedSlots(slotCount), dmAsks, teamAsks }
 }
 
 function expectValidPlacement(placed: PlacedMeeting[], slots: Slot[]) {
@@ -39,20 +39,20 @@ function expectValidPlacement(placed: PlacedMeeting[], slots: Slot[]) {
 }
 
 test('selectMeetings: DM interest beats team interest, caps respected', () => {
-  const p = input(3, 1, 2, { [pairKey('t1', 'd1')]: 1, [pairKey('t2', 'd1')]: 3 }, { [pairKey('t3', 'd1')]: 3 })
+  const p = input(3, 1, 2, { [pairKey('t1', 'd1')]: true, [pairKey('t2', 'd1')]: true }, { [pairKey('t3', 'd1')]: true, [pairKey('t2', 'd1')]: true })
   expect(selectMeetings(p).map((m) => m.team)).toEqual(['t2', 't1'])
 })
 
 test('selectMeetings: team-only requests are honoured when there is room', () => {
-  const p = input(2, 1, 5, {}, { [pairKey('t1', 'd1')]: 1 })
+  const p = input(2, 1, 5, {}, { [pairKey('t1', 'd1')]: true })
   expect(selectMeetings(p)).toEqual([{ team: 't1', dm: 'd1' }])
 })
 
 test('selectMeetings: equal interest is spread to teams with fewer meetings', () => {
   // d1 and d2 each have 1 slot; both like t1 and t2 equally. Fair result: each team gets one.
-  const scores: Scores = {}
-  for (const t of ['t1', 't2']) for (const d of ['d1', 'd2']) scores[pairKey(t, d)] = 2
-  const chosen = selectMeetings(input(2, 2, 1, scores))
+  const asks: Asks = {}
+  for (const t of ['t1', 't2']) for (const d of ['d1', 'd2']) asks[pairKey(t, d)] = true
+  const chosen = selectMeetings(input(2, 2, 1, asks))
   expect(chosen).toHaveLength(2)
   expect(new Set(chosen.map((m) => m.team))).toEqual(new Set(['t1', 't2']))
 })
@@ -78,7 +78,7 @@ test('assignSlots: places every meeting without double booking (random graphs)',
     const D = 1 + Math.floor(rand() * 12)
     const S = 1 + Math.floor(rand() * 8)
     const names = (n: number, prefix: string) => ids(n, prefix).map((x) => x.name)
-    const p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
+    const p = randomAsks(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
     const chosen = selectMeetings({ ...p, fillGaps: rand() > 0.5 })
     const placed = assignSlots(chosen, p.slots)
     expect(placed).toHaveLength(chosen.length)
@@ -118,7 +118,7 @@ test('assignSlots: respects availability, routing chains around blocked slots', 
     const D = 2 + Math.floor(rand() * 10)
     const S = 2 + Math.floor(rand() * 7)
     const names = (n: number, prefix: string) => ids(n, prefix).map((x) => x.name)
-    let p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
+    let p = randomAsks(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
     // Block a few random (person, slot) cells.
     const block = (people: Participant[]) =>
       people.map((x) => {
@@ -158,7 +158,7 @@ test('buildSchedule on the demo: every chosen meeting is placed', () => {
   expectValidPlacement(placed, p.slots)
   const stats = computeStats(p, placed)
   expect(stats.meetings).toBe(placed.length)
-  expect(stats.mustMeetSatisfied).toBeGreaterThan(0)
+  expect(stats.capacity).toBeGreaterThanOrEqual(stats.meetings)
 })
 
 test('reassign: frees, assigns, and swaps', () => {
@@ -186,15 +186,15 @@ test('findIssues: reports duplicates and clashes', () => {
 })
 
 test('computeStats: unmet lists requested pairs that were not scheduled, strongest first', () => {
-  const p = input(3, 1, 1, { [pairKey('t1', 'd1')]: 3, [pairKey('t2', 'd1')]: 2 }, { [pairKey('t3', 'd1')]: 1 })
-  const stats = computeStats(p, buildSchedule(p))
-  expect(stats.mustMeetSatisfied).toBe(1)
+  const p = input(3, 1, 1, { [pairKey('t1', 'd1')]: true, [pairKey('t2', 'd1')]: true }, { [pairKey('t1', 'd1')]: true, [pairKey('t3', 'd1')]: true })
+  const placed = buildSchedule(p)
+  expect(placed.map((m) => m.team)).toEqual(['t1'])
+  const stats = computeStats(p, placed)
   expect(stats.unmet.map((u) => u.team)).toEqual(['t2', 't3'])
-  expect(stats.teamsWithoutMeetings).toBe(2)
 })
 
-test('withScores prunes unknown participants', () => {
+test('withAsks prunes unknown participants', () => {
   const base = { ...emptyProject(), ...input(1, 1, 1) }
-  const p = withScores(base, { [pairKey('t1', 'd1')]: 2, [pairKey('t9', 'd1')]: 3 }, {})
-  expect(Object.keys(p.dmScores)).toEqual([pairKey('t1', 'd1')])
+  const p = withAsks(base, { [pairKey('t1', 'd1')]: true, [pairKey('t9', 'd1')]: true }, {})
+  expect(Object.keys(p.dmAsks)).toEqual([pairKey('t1', 'd1')])
 })

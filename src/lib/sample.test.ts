@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { sampleProject } from './sample'
 import { optimize } from './optimize'
-import { findIssues, scoreOf } from './scheduler'
+import { asked, findIssues } from './scheduler'
 import { OBJECTIVES } from './objectives'
 
 describe('sample day', () => {
@@ -17,14 +17,14 @@ describe('sample day', () => {
 
   test('interest grids are dense enough to be interesting but not full', () => {
     const cells = p.teams.length * p.dms.length
-    const dmAsked = Object.keys(p.dmScores).length
-    const teamAsked = Object.keys(p.teamScores).length
+    const dmAsked = Object.keys(p.dmAsks).length
+    const teamAsked = Object.keys(p.teamAsks).length
     expect(dmAsked / cells).toBeGreaterThan(0.4)
     expect(dmAsked / cells).toBeLessThan(0.8)
     expect(teamAsked / cells).toBeGreaterThan(0.5)
     // Every team asked for someone and every DM asked for someone.
-    for (const t of p.teams) expect(p.dms.some((d) => scoreOf(p.teamScores, t.id, d.id) > 0)).toBe(true)
-    for (const d of p.dms) expect(p.teams.some((t) => scoreOf(p.dmScores, t.id, d.id) > 0)).toBe(true)
+    for (const t of p.teams) expect(p.dms.some((d) => asked(p.teamAsks, t.id, d.id))).toBe(true)
+    for (const d of p.dms) expect(p.teams.some((t) => asked(p.dmAsks, t.id, d.id))).toBe(true)
   })
 
   test('optimizer produces a valid frontier', () => {

@@ -8,22 +8,18 @@
 // (e.g. "one more decision-maker wish granted" vs "two fewer idle windows"),
 // which is why we show them all rather than picking by a hidden formula.
 
-import { allPairs, availabilityOf, MAX_SCORE, pairKey, slotIndex, type Availability, type Id, type PlacedMeeting, type ScheduleInput, type Slot } from './scheduler'
+import { allPairs, availabilityOf, pairKey, slotIndex, type Availability, type Id, type PlacedMeeting, type ScheduleInput, type Slot } from './scheduler'
 
 export interface Objectives {
-  /** Decision-maker must-meets (score 3) that did not get a meeting. */
-  missedMust: number
-  /** Decision-maker priority asks (score 2) that did not get a meeting. */
-  missedPriority: number
-  /** Decision-maker "interested" asks (score 1) that did not get a meeting. */
-  missedInterested: number
+  /** Decision-maker asks that did not get a meeting. */
+  missedDm: number
   /** Decision makers who got fewer than half of the meetings they asked for. */
   dmsUnderHalf: number
   /** Teams that got no meeting at all. */
   teamsEmpty: number
   /** Idle slots inside a decision maker's day (between their first and last meeting) that they could have used, summed. */
   dmGaps: number
-  /** Team asks (any score) that did not get a meeting. */
+  /** Team asks that did not get a meeting. */
   missedTeam: number
   /** Meetings that neither side asked for. */
   fillers: number
@@ -35,14 +31,12 @@ export type ObjectiveKey = keyof Objectives
 
 /**
  * In priority order: this is also the tie-break order used to pick a default.
- * Decision-maker asks come as tiers — a must-meet is worth any number of
- * priorities, a priority any number of "interested" — because that is what the
- * words mean to the people ticking the boxes.
+ * Decision-maker asks come first because the decision makers are the guests
+ * whose time the day is organised around; team asks are heard once every
+ * decision maker has been served as well as possible.
  */
 export const OBJECTIVES: { key: ObjectiveKey; label: string; hint: string }[] = [
-  { key: 'missedMust', label: 'must-meets', hint: 'Decision-maker must-meets that got no meeting' },
-  { key: 'missedPriority', label: 'priorities', hint: 'Decision-maker priority asks that got no meeting' },
-  { key: 'missedInterested', label: 'interested', hint: 'Decision-maker "interested" asks that got no meeting' },
+  { key: 'missedDm', label: 'DM asks', hint: 'Decision-maker asks that got no meeting' },
   { key: 'dmsUnderHalf', label: 'DMs under half', hint: 'Decision makers who got fewer than half of the meetings they asked for' },
   { key: 'teamsEmpty', label: 'teams left out', hint: 'Teams with no meeting at all' },
   { key: 'dmGaps', label: 'DM windows', hint: 'Empty slots between a decision maker’s first and last meeting, added up over all decision makers' },
@@ -52,18 +46,16 @@ export const OBJECTIVES: { key: ObjectiveKey; label: string; hint: string }[] = 
 ]
 
 /** Objectives that count missed asks; shown to users as met/requested. */
-export const ASK_OBJECTIVES: Partial<Record<ObjectiveKey, (p: { dmScore: number; teamScore: number }) => boolean>> = {
-  missedMust: (p) => p.dmScore === 3,
-  missedPriority: (p) => p.dmScore === 2,
-  missedInterested: (p) => p.dmScore === 1,
-  missedTeam: (p) => p.teamScore > 0,
+export const ASK_OBJECTIVES: Partial<Record<ObjectiveKey, (p: { dmAsked: boolean; teamAsked: boolean }) => boolean>> = {
+  missedDm: (p) => p.dmAsked,
+  missedTeam: (p) => p.teamAsked,
 }
 
 /** How many asks of each kind the input contains, so missed counts can be shown as met/requested. */
 export function requestedCounts(input: Omit<ScheduleInput, 'slots'>): Partial<Record<ObjectiveKey, number>> {
   const out: Partial<Record<ObjectiveKey, number>> = {}
   const pairs = allPairs(input)
-  for (const [key, test] of Object.entries(ASK_OBJECTIVES) as [ObjectiveKey, (p: { dmScore: number; teamScore: number }) => boolean][]) {
+  for (const [key, test] of Object.entries(ASK_OBJECTIVES) as [ObjectiveKey, (p: { dmAsked: boolean; teamAsked: boolean }) => boolean][]) {
     out[key] = pairs.filter(test).length
   }
   return out
@@ -95,23 +87,21 @@ export function measure(input: ScheduleInput, meetings: PlacedMeeting[]): Object
   const teamsMet = new Set(meetings.map((m) => m.team))
   const available = availabilityOf([...input.teams, ...input.dms])
 
-  const o: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+  const o: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
   const asked = new Map<Id, [number, number]>()
   for (const p of allPairs(input)) {
     const got = met.has(pairKey(p.team, p.dm))
-    if (p.dmScore > 0) {
+    if (p.dmAsked) {
       const a = asked.get(p.dm) ?? [0, 0]
       a[0]++
       if (got) a[1]++
       asked.set(p.dm, a)
     }
     if (got) {
-      if (p.dmScore === 0 && p.teamScore === 0) o.fillers++
+      if (!p.dmAsked && !p.teamAsked) o.fillers++
     } else {
-      if (p.dmScore === MAX_SCORE) o.missedMust++
-      if (p.dmScore === 2) o.missedPriority++
-      if (p.dmScore === 1) o.missedInterested++
-      if (p.teamScore > 0) o.missedTeam++
+      if (p.dmAsked) o.missedDm++
+      if (p.teamAsked) o.missedTeam++
     }
   }
   for (const [n, k] of asked.values()) if (2 * k < n) o.dmsUnderHalf++

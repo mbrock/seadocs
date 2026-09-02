@@ -22,14 +22,14 @@ import { allPairs, availableCounts, type Meeting, type ScheduleInput } from './s
 
 export interface FlowOptions {
   /** Value of scheduling this pair; pairs with weight <= 0 are never chosen. */
-  weight: (dmScore: number, teamScore: number) => number
+  weight: (dmAsked: boolean, teamAsked: boolean) => number
   /** Each team's first `teamFloor` meetings are worth more than anything else. */
   teamFloor?: number
   /**
    * Extra value of a pair that only counts after weight AND fair share tie —
    * a way to rank team asks below fairness. Whole numbers, at most a few per pair.
    */
-  tieBreak?: (dmScore: number, teamScore: number) => number
+  tieBreak?: (dmAsked: boolean, teamAsked: boolean) => number
 }
 
 interface Edge {
@@ -70,7 +70,7 @@ export function selectByFlow(input: ScheduleInput, { weight, teamFloor = 0, tieB
   // that outweighs any combination of pair weights, so the solver fills floors
   // first and only then optimises interest.
   let maxWeight = 0
-  const pairs = allPairs(input).map((p) => ({ ...p, w: weight(p.dmScore, p.teamScore) }))
+  const pairs = allPairs(input).map((p) => ({ ...p, w: weight(p.dmAsked, p.teamAsked) }))
   for (const p of pairs) maxWeight = Math.max(maxWeight, p.w)
   const FLOOR_REWARD = maxWeight * pairs.length + 1
 
@@ -80,8 +80,8 @@ export function selectByFlow(input: ScheduleInput, { weight, teamFloor = 0, tieB
   const asksTeam = new Array<number>(T).fill(0)
   const asksDm = new Array<number>(D).fill(0)
   for (const p of pairs) {
-    if (p.teamScore > 0) asksTeam[p.ti]++
-    if (p.dmScore > 0) asksDm[p.di]++
+    if (p.teamAsked) asksTeam[p.ti]++
+    if (p.dmAsked) asksDm[p.di]++
   }
   const share = (k: number, asks: number) => Math.round((k / Math.max(asks, 1)) * SHARE_SCALE)
 
@@ -98,7 +98,7 @@ export function selectByFlow(input: ScheduleInput, { weight, teamFloor = 0, tieB
     const c = cap.get(input.dms[d].id) ?? 0
     for (let k = 0; k < c; k++) addEdge(dmNode(d), SINK, 1, 0, share(k, asksDm[d]))
   }
-  for (const p of pairs) if (p.w > 0) addEdge(teamNode(p.ti), dmNode(p.di), 1, -p.w, -tieBreak(p.dmScore, p.teamScore))
+  for (const p of pairs) if (p.w > 0) addEdge(teamNode(p.ti), dmNode(p.di), 1, -p.w, -tieBreak(p.dmAsked, p.teamAsked))
 
   // Augment along the cheapest path while it still pays. Distances are
   // (cost, share) pairs compared lexicographically.

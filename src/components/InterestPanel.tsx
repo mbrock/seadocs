@@ -1,9 +1,9 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
-import { MAX_SCORE, SCORE_LABELS, scoreOf, type Id, type Participant, type Scores } from '../lib/scheduler'
+import { asked, type Asks, type Id, type Participant } from '../lib/scheduler'
 import { interestCsv, download } from '../lib/csv'
 import { parseInterestGrid, type GridImport } from '../lib/import'
-import { cycleScore, withScore, withScores, type Project, type ScoreKind } from '../lib/project'
-import { Button, Chooser, Empty, Name, OnlineMark, Panel, PanelHeader, Segmented, scoreTint, textareaClass } from './ui'
+import { toggleAsk, withAsk, withAsks, type AskKind, type Project } from '../lib/project'
+import { Button, Chooser, Empty, KeyItem, Name, OnlineMark, Panel, PanelHeader, Segmented, Swatch, askTint, textareaClass } from './ui'
 import { useNames } from './useNames'
 import { parseName, type DisplayName } from '../lib/names'
 
@@ -14,28 +14,28 @@ interface Props {
 
 type Layout = 'list' | 'grid'
 
-const MODES: { value: ScoreKind; label: string; title: string }[] = [
-  { value: 'dm', label: 'Decision makers ask', title: 'How keen each decision maker is to meet each team. Drives the schedule.' },
-  { value: 'team', label: 'Teams ask', title: 'How keen each team is to meet each decision maker. Breaks ties and adds requests.' },
+const MODES: { value: AskKind; label: string; title: string }[] = [
+  { value: 'dm', label: 'Decision makers ask', title: 'Which teams each decision maker wants to meet. Drives the schedule.' },
+  { value: 'team', label: 'Teams ask', title: 'Which decision makers each team wants to meet. Heard once the decision makers are served.' },
 ]
 
 /**
- * Two score tables with the same shape, edited one side at a time. The default
- * layout edits one person's asks at a time; the overview grid shows everything
- * but needs a wide screen.
+ * Two ask tables with the same shape, edited one side at a time: a cell is
+ * either asked or not. The default layout edits one person's asks at a time;
+ * the overview grid shows everything but needs a wide screen.
  */
 export function InterestPanel({ project, onChange }: Props) {
-  const [mode, setMode] = useState<ScoreKind>('dm')
+  const [mode, setMode] = useState<AskKind>('dm')
   const [layout, setLayout] = useState<Layout>('list')
   const [pasting, setPasting] = useState(false)
   const names = useNames(project)
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
-  const asked = Object.keys(mode === 'dm' ? project.dmScores : project.teamScores).length
+  const count = Object.keys(mode === 'dm' ? project.dmAsks : project.teamAsks).length
   const kindLabel = mode === 'dm' ? 'decision makers' : 'teams'
 
   return (
     <Panel>
-      <PanelHeader title={`Interest · ${asked} ${asked === 1 ? 'ask' : 'asks'} from ${kindLabel}`}>
+      <PanelHeader title={`Interest · ${count} ${count === 1 ? 'ask' : 'asks'} from ${kindLabel}`}>
         <Segmented label="Whose interest" value={mode} options={MODES} onChange={setMode} />
         <div className="hidden md:block">
           <Segmented
@@ -49,7 +49,7 @@ export function InterestPanel({ project, onChange }: Props) {
             ]}
           />
         </div>
-        <ScoreKey kind={mode} />
+        <AskKey kind={mode} />
         <Button disabled={!hasPeople} onClick={() => setPasting((v) => !v)} aria-expanded={pasting} title="Paste a grid copied from a spreadsheet">
           Paste
         </Button>
@@ -60,7 +60,7 @@ export function InterestPanel({ project, onChange }: Props) {
           variant="quiet"
           disabled={!hasPeople}
           onClick={() => {
-            if (confirm(`Clear what ${kindLabel} asked?`)) onChange(mode === 'dm' ? withScores(project, {}, project.teamScores) : withScores(project, project.dmScores, {}))
+            if (confirm(`Clear what ${kindLabel} asked?`)) onChange(mode === 'dm' ? withAsks(project, {}, project.teamAsks) : withAsks(project, project.dmAsks, {}))
           }}
         >
           clear
@@ -74,18 +74,18 @@ export function InterestPanel({ project, onChange }: Props) {
             <PasteGrid
               project={project}
               mode={mode}
-              onApply={(scores) => {
-                onChange((p) => (mode === 'dm' ? withScores(p, scores, p.teamScores) : withScores(p, p.dmScores, scores)))
+              onApply={(asks) => {
+                onChange((p) => (mode === 'dm' ? withAsks(p, asks, p.teamAsks) : withAsks(p, p.dmAsks, asks)))
                 setPasting(false)
               }}
               onClose={() => setPasting(false)}
             />
           )}
           <div className={layout === 'grid' ? 'hidden md:block' : 'hidden'}>
-            <Grid project={project} mode={mode} onCycle={(team, dm) => onChange((p) => cycleScore(p, mode, team, dm))} />
+            <Grid project={project} mode={mode} onToggle={(team, dm) => onChange((p) => toggleAsk(p, mode, team, dm))} />
           </div>
           <div className={layout === 'grid' ? 'md:hidden' : ''}>
-            <RowEditor project={project} names={names} mode={mode} onSet={(team, dm, s) => onChange((p) => withScore(p, mode, team, dm, s))} />
+            <RowEditor project={project} names={names} mode={mode} onSet={(team, dm, wants) => onChange((p) => withAsk(p, mode, team, dm, wants))} />
           </div>
         </>
       )}
@@ -95,10 +95,10 @@ export function InterestPanel({ project, onChange }: Props) {
 
 /**
  * Import a grid from the clipboard: names down one side and across the top,
- * 0–3 in the cells. Replaces this side's asks once the organiser has seen
- * what matched.
+ * a mark (x, 1, yes) in the cells that are asked. Replaces this side's asks
+ * once the organiser has seen what matched.
  */
-function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode: ScoreKind; onApply: (scores: Scores) => void; onClose: () => void }) {
+function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode: AskKind; onApply: (asks: Asks) => void; onClose: () => void }) {
   const [text, setText] = useState('')
   const parsed: GridImport | null = text.trim() ? parseInterestGrid(text, project.teams, project.dms) : null
   const who = mode === 'dm' ? 'decision makers' : 'teams'
@@ -107,7 +107,7 @@ function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode
       <textarea
         aria-label="Pasted interest grid"
         className={`${textareaClass} min-h-[8rem] font-mono text-[0.75rem]`}
-        placeholder={'Copy the sheet and paste it here.\nNames across the top and down the side, 0–3 (or x) in the cells.'}
+        placeholder={'Copy the sheet and paste it here.\nNames across the top and down the side, x (or 1, yes) where someone asked.'}
         value={text}
         onChange={(e) => setText(e.target.value)}
         autoFocus
@@ -117,7 +117,7 @@ function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode
         {parsed ? (
           <ul className="text-[0.8rem]">
             <li>
-              {parsed.matchedDms}/{project.dms.length} decision makers · {parsed.matchedTeams}/{project.teams.length} teams · {Object.keys(parsed.scores).length} asks
+              {parsed.matchedDms}/{project.dms.length} decision makers · {parsed.matchedTeams}/{project.teams.length} teams · {Object.keys(parsed.asks).length} asks
             </li>
             {parsed.unmatched.length > 0 && (
               <li className="text-warn" title={parsed.unmatched.join(', ')}>
@@ -125,13 +125,13 @@ function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode
                 {parsed.unmatched.length > 4 && ` +${parsed.unmatched.length - 4}`}
               </li>
             )}
-            {parsed.unreadable > 0 && <li className="text-warn">{parsed.unreadable} cells were not 0–3</li>}
+            {parsed.unreadable > 0 && <li className="text-warn">{parsed.unreadable} cells were not x, yes, 1 or blank</li>}
           </ul>
         ) : (
           text.trim() && <p className="text-warn">No names recognised in the first row or column.</p>
         )}
         <div className="mt-auto flex gap-2">
-          <Button variant="primary" disabled={!parsed} onClick={() => parsed && onApply(parsed.scores)}>
+          <Button variant="primary" disabled={!parsed} onClick={() => parsed && onApply(parsed.asks)}>
             Apply
           </Button>
           <Button variant="quiet" onClick={onClose}>
@@ -143,26 +143,26 @@ function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode
   )
 }
 
-function ScoreKey({ kind }: { kind: ScoreKind }) {
+function AskKey({ kind }: { kind: AskKind }) {
+  const other = kind === 'dm' ? 'team' : 'DM'
   return (
-    <div className="flex items-center gap-2 text-[0.7rem] text-muted">
-      {SCORE_LABELS.map((label, s) => (
-        <span key={s} className="inline-flex items-center gap-1" title={s ? label : 'not asked'}>
-          <span className={`inline-flex h-4 w-4 items-center justify-center rounded-[2px] border border-rule text-[0.65rem] ${scoreTint[kind][s]}`}>
-            {s || ''}
-          </span>
-          <span className="hidden lg:inline">{s ? label : 'not asked'}</span>
-        </span>
-      ))}
+    <div className="hidden items-center gap-3 lg:flex">
+      <KeyItem swatch={<Swatch className={askTint[kind]} />}>asked</KeyItem>
+      <KeyItem swatch={<Swatch className="bg-paper" />}>not asked</KeyItem>
+      <KeyItem swatch={<OtherDot kind={kind} />}>{other} asked too</KeyItem>
     </div>
   )
 }
 
-/** Rows = decision makers, columns = teams, in both modes; the mode decides whose score the digit is. */
-function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; onCycle: (team: Id, dm: Id) => void }) {
-  const scores = mode === 'dm' ? project.dmScores : project.teamScores
-  const otherScores = mode === 'dm' ? project.teamScores : project.dmScores
-  const otherDot = mode === 'dm' ? 'bg-sea-3' : 'bg-gold-3'
+/** Small dot in the other side's colour: they asked for this pair as well. */
+function OtherDot({ kind, className = '' }: { kind: AskKind; className?: string }) {
+  return <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${kind === 'dm' ? 'bg-sea-3' : 'bg-gold-3'} ${className}`} />
+}
+
+/** Rows = decision makers, columns = teams, in both modes; the mode decides whose ask the mark is. */
+function Grid({ project, mode, onToggle }: { project: Project; mode: AskKind; onToggle: (team: Id, dm: Id) => void }) {
+  const asks = mode === 'dm' ? project.dmAsks : project.teamAsks
+  const otherAsks = mode === 'dm' ? project.teamAsks : project.dmAsks
   return (
     <div className="max-h-[75vh] overflow-auto">
       <table className="border-separate border-spacing-0 text-[0.8rem]">
@@ -190,18 +190,21 @@ function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; o
                 <Name person={d} className="flex max-w-[14rem]" />
               </th>
               {project.teams.map((t) => {
-                const s = scoreOf(scores, t.id, d.id)
-                const other = scoreOf(otherScores, t.id, d.id)
+                const on = asked(asks, t.id, d.id)
+                const other = asked(otherAsks, t.id, d.id)
                 return (
                   <td key={t.id} className="border-r border-b border-rule/70 p-0">
                     <button
                       type="button"
-                      title={`${d.name} × ${t.name}: ${SCORE_LABELS[s]}${other ? ` (other side: ${SCORE_LABELS[other]})` : ''}`}
-                      onClick={() => onCycle(t.id, d.id)}
-                      className={`relative block h-7 w-7 cursor-pointer text-[0.8rem] font-semibold tabular-nums hover:outline hover:outline-ink ${scoreTint[mode][s] || 'text-faint'}`}
+                      role="checkbox"
+                      aria-checked={on}
+                      aria-label={`${d.name} × ${t.name}`}
+                      title={`${d.name} × ${t.name}: ${on ? 'asked' : 'not asked'}${other ? ' · the other side asked too' : ''}`}
+                      onClick={() => onToggle(t.id, d.id)}
+                      className={`relative block h-7 w-7 cursor-pointer text-[0.8rem] font-semibold hover:outline hover:outline-ink ${on ? askTint[mode] : 'text-faint'}`}
                     >
-                      {s || ''}
-                      {other > 0 && <span aria-hidden className={`absolute right-0.5 bottom-0.5 h-1 w-1 rounded-full ${otherDot}`} />}
+                      {on ? '✓' : ''}
+                      {other && <OtherDot kind={mode} className="absolute right-0.5 bottom-0.5" />}
                     </button>
                   </td>
                 )
@@ -214,7 +217,7 @@ function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; o
   )
 }
 
-/** Pick one person on the asking side; rate everyone on the other side. */
+/** Pick one person on the asking side; tick everyone they want to meet on the other side. */
 function RowEditor({
   project,
   names,
@@ -223,17 +226,17 @@ function RowEditor({
 }: {
   project: Project
   names: Map<Id, DisplayName>
-  mode: ScoreKind
-  onSet: (team: Id, dm: Id, score: number) => void
+  mode: AskKind
+  onSet: (team: Id, dm: Id, wants: boolean) => void
 }) {
   const askers: Participant[] = mode === 'dm' ? project.dms : project.teams
   const targets: Participant[] = mode === 'dm' ? project.teams : project.dms
   const [pickedId, setPicked] = useState<Id | null>(null)
   const asker = askers.find((a) => a.id === pickedId) ?? askers[0]
-  const scores = mode === 'dm' ? project.dmScores : project.teamScores
-  const otherScores = mode === 'dm' ? project.teamScores : project.dmScores
+  const asks = mode === 'dm' ? project.dmAsks : project.teamAsks
+  const otherAsks = mode === 'dm' ? project.teamAsks : project.dmAsks
   const pair = (asking: Id, target: Id): [Id, Id] => (mode === 'dm' ? [target, asking] : [asking, target])
-  const asksOf = (a: Participant) => targets.filter((t) => scoreOf(scores, ...pair(a.id, t.id)) > 0).length
+  const asksOf = (a: Participant) => targets.filter((t) => asked(asks, ...pair(a.id, t.id))).length
   const index = askers.indexOf(asker)
   const step = (delta: number) => setPicked(askers[(index + delta + askers.length) % askers.length].id)
   const display = names.get(asker.id)
@@ -274,35 +277,27 @@ function RowEditor({
         <ul className="divide-y divide-rule border-y border-rule">
           {targets.map((t) => {
             const [team, dm] = pair(asker.id, t.id)
-            const s = scoreOf(scores, team, dm)
-            const other = scoreOf(otherScores, team, dm)
+            const on = asked(asks, team, dm)
+            const other = asked(otherAsks, team, dm)
             return (
-              <li key={t.id} className="flex items-center justify-between gap-3 py-1.5">
-                <span className="flex min-w-0 flex-1 items-baseline gap-2 text-[0.9rem]">
-                  <Name person={t} display={names.get(t.id)} className="flex" />
-                  {other > 0 && (
-                    <span className={`shrink-0 rounded-[2px] px-1 text-[0.68rem] font-semibold ${scoreTint[mode === 'dm' ? 'team' : 'dm'][other]}`} title={`They asked: ${SCORE_LABELS[other]}`}>
-                      they {other}
-                    </span>
-                  )}
-                </span>
-                <div role="radiogroup" aria-label={`${asker.name} → ${t.name}`} className="inline-flex shrink-0 rounded-[3px] border border-rule">
-                  {Array.from({ length: MAX_SCORE + 1 }, (_, v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      role="radio"
-                      aria-checked={s === v}
-                      title={SCORE_LABELS[v]}
-                      onClick={() => onSet(team, dm, v)}
-                      className={`h-8 w-9 cursor-pointer text-[0.85rem] font-semibold tabular-nums first:rounded-l-[2px] last:rounded-r-[2px] ${
-                        s === v ? scoreTint[mode][v] || 'bg-ink text-paper' : 'text-faint hover:bg-canvas hover:text-ink'
-                      }`}
-                    >
-                      {v || '–'}
-                    </button>
-                  ))}
-                </div>
+              <li key={t.id}>
+                <label className="flex cursor-pointer items-center justify-between gap-3 py-1.5 hover:bg-canvas">
+                  <span className="flex min-w-0 flex-1 items-baseline gap-2 text-[0.9rem]">
+                    <Name person={t} display={names.get(t.id)} className="flex" />
+                    {other && (
+                      <span className={`shrink-0 rounded-[2px] px-1 text-[0.68rem] font-semibold ${askTint[mode === 'dm' ? 'team' : 'dm']}`} title="They asked too">
+                        they asked
+                      </span>
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={(e) => onSet(team, dm, e.target.checked)}
+                    aria-label={`${asker.name} → ${t.name}`}
+                    className={`h-5 w-5 shrink-0 cursor-pointer rounded-[3px] border border-rule ${mode === 'dm' ? 'accent-gold-3' : 'accent-sea-3'}`}
+                  />
+                </label>
               </li>
             )
           })}

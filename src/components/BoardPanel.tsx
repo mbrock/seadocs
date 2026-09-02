@@ -7,9 +7,8 @@ import {
   indexMeetings,
   isRefused,
   pairKey,
+  asked,
   rankOf,
-  scoreOf,
-  SCORE_LABELS,
   type AssignEffect,
   type Availability,
   type Id,
@@ -28,7 +27,8 @@ import { optimize, type Alternative } from '../lib/optimize'
 import { Frontier } from './Frontier'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, ScorePair, Segmented, scoreTint, Swatch } from './ui'
+import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
+import { askedBy } from '../lib/describe'
 
 interface Props {
   project: Project
@@ -49,14 +49,14 @@ export function BoardPanel({ project, onChange }: Props) {
   const [cell, setCell] = useState<Cell | null>(null)
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
   const names = useNames(project)
-  const { teams, dms, dmScores, teamScores, slots } = project
+  const { teams, dms, dmAsks, teamAsks, slots } = project
   const available = useMemo(() => availabilityOfProject({ teams, dms }), [teams, dms])
   const stats = useMemo(() => computeStats(project, project.meetings), [project])
   const issues = useMemo(() => findIssues(project.meetings, available), [project.meetings, available])
   // The boards the solver would build from the current input, recomputed only when the input (not the board) changes.
   const alternatives: Alternative[] = useMemo(
-    () => (hasPeople ? optimize({ teams, dms, dmScores, teamScores, slots }) : []),
-    [hasPeople, teams, dms, dmScores, teamScores, slots],
+    () => (hasPeople ? optimize({ teams, dms, dmAsks, teamAsks, slots }) : []),
+    [hasPeople, teams, dms, dmAsks, teamAsks, slots],
   )
 
   // Forget the selection when its slot or participant disappears.
@@ -148,11 +148,10 @@ export function BoardPanel({ project, onChange }: Props) {
   )
 }
 
-/** Three-step bar: how much the team asked for this meeting. */
-function TeamBar({ score, className = '' }: { score: number; className?: string }) {
-  if (!score) return null
-  const height = ['', 'h-1/3', 'h-2/3', 'h-full'][score]
-  return <span aria-hidden className={`w-[3px] bg-sea-3 ${height} ${className}`} />
+/** Bar at the cell's right edge: the team asked for this meeting. */
+function TeamBar({ show, className = '' }: { show: boolean; className?: string }) {
+  if (!show) return null
+  return <span aria-hidden className={`h-full w-[3px] bg-sea-3 ${className}`} />
 }
 
 /** Rows = one side (decision makers or teams), columns = slots. */
@@ -204,8 +203,8 @@ function Grid({
               {project.slots.map((slot) => {
                 const m = meetingAt(slot.id, person.id)
                 const partner = m ? partnerOf(m) : undefined
-                const dmScore = m ? scoreOf(project.dmScores, m.team, m.dm) : 0
-                const teamScore = m ? scoreOf(project.teamScores, m.team, m.dm) : 0
+                const dmAsked = m ? asked(project.dmAsks, m.team, m.dm) : false
+                const teamAsked = m ? asked(project.teamAsks, m.team, m.dm) : false
                 const off = !available(person.id, slot.id)
                 // Only a loaded file can contain a repeat; the editor refuses to create one.
                 const repeat = m ? (index.byPair.get(pairKey(m.team, m.dm))?.length ?? 0) > 1 : false
@@ -217,12 +216,12 @@ function Grid({
                       type="button"
                       aria-pressed={active}
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
-                      title={partner ? `${partner.name} · decision maker ${SCORE_LABELS[dmScore]}, team ${SCORE_LABELS[teamScore]}` : state}
+                      title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
                       className={`relative flex h-7 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
-                      } ${off && !partner ? 'hatched' : scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'} ${
-                        partner && dmScore === 0 && teamScore === 0 ? 'text-muted' : ''
+                      } ${off && !partner ? 'hatched' : dmAsked ? askTint.dm : ''} ${partner ? '' : 'text-faint'} ${
+                        partner && !dmAsked && !teamAsked ? 'text-muted' : ''
                       }`}
                     >
                       {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : off ? null : <span>·</span>}
@@ -231,7 +230,7 @@ function Grid({
                           {repeat ? '×2' : '!'}
                         </span>
                       )}
-                      <TeamBar score={teamScore} className="absolute right-0 bottom-0" />
+                      <TeamBar show={teamAsked} className="absolute top-0 right-0" />
                     </button>
                   </td>
                 )
@@ -244,31 +243,19 @@ function Grid({
   )
 }
 
-/** What the cell colours mean: tint = how much the decision maker asked; the bar at the right edge = how much the team asked. */
+/** What the cell colours mean: gold tint = the decision maker asked; the bar at the right edge = the team asked. */
 function Key() {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <KeyItem swatch={<Swatch className={askTint.dm} />}>DM asked</KeyItem>
       <KeyItem
         swatch={
-          <span className="inline-flex gap-px">
-            <Swatch className="bg-gold-1" />
-            <Swatch className="bg-gold-2" />
-            <Swatch className="bg-gold-3" />
+          <span className="relative inline-flex h-3 w-3 border border-rule">
+            <TeamBar show className="absolute top-0 right-0" />
           </span>
         }
       >
-        DM asked 1 · 2 · 3
-      </KeyItem>
-      <KeyItem
-        swatch={
-          <span className="inline-flex h-3 items-end gap-[3px]">
-            <TeamBar score={1} />
-            <TeamBar score={2} />
-            <TeamBar score={3} />
-          </span>
-        }
-      >
-        team asked 1 · 2 · 3
+        team asked
       </KeyItem>
       <KeyItem swatch={<Swatch className="bg-paper" />}>nobody asked</KeyItem>
       <KeyItem swatch={<Swatch className="hatched" />}>not available</KeyItem>
@@ -304,7 +291,7 @@ function Inspector({
   const current = meeting ? meeting[other] : null
   const anchorOff = !available(anchor, slot)
   const time = slotLabel(project, slot)
-  const scoresFor = (team: Id, dm: Id) => ({ dm: scoreOf(project.dmScores, team, dm), team: scoreOf(project.teamScores, team, dm) })
+  const asksFor = (team: Id, dm: Id) => ({ dm: asked(project.dmAsks, team, dm), team: asked(project.teamAsks, team, dm) })
   const pairWith = (partner: Id) => (side === 'dm' ? { team: partner, dm: anchor } : { team: anchor, dm: partner })
   const load = new Map<Id, number>()
   for (const m of project.meetings) load.set(m[other], (load.get(m[other]) ?? 0) + 1)
@@ -313,8 +300,8 @@ function Inspector({
     .filter((c) => c.id !== current)
     .map((c) => {
       const p = pairWith(c.id)
-      const s = scoresFor(p.team, p.dm)
-      return { person: c, dmScore: s.dm, teamScore: s.team, rank: s.dm * 4 + s.team, effect: assignEffect(project.meetings, slot, side, anchor, c.id, available) }
+      const a = asksFor(p.team, p.dm)
+      return { person: c, dmAsked: a.dm, teamAsked: a.team, rank: (a.dm ? 2 : 0) + (a.team ? 1 : 0), effect: assignEffect(project.meetings, slot, side, anchor, c.id, available) }
     })
     // Strongest request first.
     .sort((a, b) => b.rank - a.rank || a.person.name.localeCompare(b.person.name))
@@ -326,7 +313,7 @@ function Inspector({
   const unrequested = rows.filter((r) => r.rank === 0)
 
   const assign = (partner: Id | null) => onAssign(assignCell(project.meetings, slot, side, anchor, partner, available))
-  const cur = current ? scoresFor(pairWith(current).team, pairWith(current).dm) : null
+  const cur = current ? asksFor(pairWith(current).team, pairWith(current).dm) : null
   const code = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const anchorCode = code(anchor)
 
@@ -345,7 +332,7 @@ function Inspector({
       case 'swap':
         return (
           <>
-            swap · {code(e.displaced)} gets {code(e.second[other])} <ScorePair {...scoresFor(e.second.team, e.second.dm)} />
+            swap · {code(e.displaced)} gets {code(e.second[other])} <AskPair {...asksFor(e.second.team, e.second.dm)} />
           </>
         )
       case 'repeat':
@@ -388,8 +375,8 @@ function Inspector({
                 <div className="min-w-0">
                   <div className="eyebrow">Meets</div>
                   <div className="truncate font-semibold">{participantName(project, current)}</div>
-                  <div className="text-[0.8rem] text-muted">
-                    decision maker {SCORE_LABELS[cur.dm]} · team {SCORE_LABELS[cur.team]}
+                  <div className="flex items-center gap-1.5 text-[0.8rem] text-muted">
+                    <AskPair dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
                   </div>
                 </div>
                 <Button onClick={() => assign(null)} title="Take this meeting off the board">
@@ -431,8 +418,8 @@ function Inspector({
 
 interface CandidateRow {
   person: Participant
-  dmScore: number
-  teamScore: number
+  dmAsked: boolean
+  teamAsked: boolean
   rank: number
   effect: AssignEffect
 }
@@ -468,7 +455,7 @@ function CandidateList({
                 {effectLine(r.effect)} · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
               </span>
             </span>
-            <ScorePair dm={r.dmScore} team={r.teamScore} />
+            <AskPair dm={r.dmAsked} team={r.teamAsked} />
           </button>
         </li>
       ))}
@@ -495,17 +482,17 @@ function Summary({
   hasBoard: boolean
 }) {
   const objectives: Objectives = useMemo(() => measure(project, project.meetings), [project])
-  const asked = useMemo(() => requestedCounts(project), [project])
+  const requested = useMemo(() => requestedCounts(project), [project])
   if (!hasBoard) return null
   const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
-  const met = (key: ObjectiveKey) => `${(asked[key] ?? 0) - objectives[key]}/${asked[key] ?? 0}`
+  const met = (key: ObjectiveKey) => `${(requested[key] ?? 0) - objectives[key]}/${requested[key] ?? 0}`
 
   // Per decision maker: meetings they asked for vs got, worst share first.
   const perDm = project.dms
     .map((dm) => {
-      const wanted = project.teams.filter((t) => scoreOf(project.dmScores, t.id, dm.id) > 0).length
-      const got = project.teams.filter((t) => scoreOf(project.dmScores, t.id, dm.id) > 0 && index.byPair.has(pairKey(t.id, dm.id))).length
+      const wanted = project.teams.filter((t) => asked(project.dmAsks, t.id, dm.id)).length
+      const got = project.teams.filter((t) => asked(project.dmAsks, t.id, dm.id) && index.byPair.has(pairKey(t.id, dm.id))).length
       return { dm, wanted, got, share: wanted ? got / wanted : 1 }
     })
     .filter((r) => r.wanted > 0)
@@ -534,10 +521,8 @@ function Summary({
       <PanelHeader title="This board" />
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-3 py-3">
         <Figure value={`${stats.meetings}/${stats.capacity}`} label="meetings possible" />
-        <Figure value={met('missedMust')} label="must-meets" tone={objectives.missedMust > 0 ? 'warn' : 'ink'} />
-        <Figure value={met('missedPriority')} label="priorities" />
-        <Figure value={met('missedInterested')} label="interested" />
-        <Figure value={met('missedTeam')} label="team asks" />
+        <Figure value={met('missedDm')} label="DM asks met" tone={objectives.missedDm > 0 ? 'warn' : 'ink'} />
+        <Figure value={met('missedTeam')} label="team asks met" />
         <Figure value={objectives.dmGaps} label="DM windows" tone={objectives.dmGaps ? 'ink' : 'muted'} />
         <Figure value={objectives.dmsUnderHalf} label="DMs under half" tone={objectives.dmsUnderHalf ? 'warn' : 'muted'} />
         <Figure value={objectives.teamsEmpty} label="teams left out" tone={objectives.teamsEmpty ? 'warn' : 'muted'} />
@@ -583,7 +568,7 @@ function Summary({
             {stats.unmet.map((p) => (
               <li key={pairKey(p.team, p.dm)} className="flex items-center justify-between gap-2 py-0.5" title={`rank ${rankOf(p)}`}>
                 <span className="min-w-0 truncate">
-                  {p.dmScore > 0 ? (
+                  {p.dmAsked ? (
                     <>
                       {name(p.dm)} <span className="text-muted">→</span> {name(p.team)}
                     </>
@@ -594,7 +579,7 @@ function Summary({
                   )}
                   <span className="ml-1.5 text-[0.7rem] text-muted">{why(p)}</span>
                 </span>
-                <ScorePair dm={p.dmScore} team={p.teamScore} />
+                <AskPair dm={p.dmAsked} team={p.teamAsked} />
               </li>
             ))}
           </ul>

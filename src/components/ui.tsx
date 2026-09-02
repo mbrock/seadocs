@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import type { Id, Participant } from '../lib/scheduler'
 import type { DisplayName } from '../lib/names'
+import { askedBy } from '../lib/describe'
 
 type Variant = 'primary' | 'default' | 'quiet' | 'danger'
 
@@ -97,19 +98,15 @@ export function Empty({ children }: { children: ReactNode }) {
 export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 text-[0.85rem] focus:border-ink focus:outline-none'
 export const textareaClass = `${inputClass} w-full resize-y leading-[1.5]`
 
-/** Interest score 0..3 as background + text classes; gold for decision makers, sea for teams. */
-export const scoreTint = {
-  dm: ['', 'bg-gold-1 text-ink', 'bg-gold-2 text-ink', 'bg-gold-3 text-paper'],
-  team: ['', 'bg-sea-1 text-ink', 'bg-sea-2 text-ink', 'bg-sea-3 text-paper'],
-} as const
+/** An ask as background + text classes: gold for decision makers, sea for teams. */
+export const askTint = { dm: 'bg-gold-2 text-ink', team: 'bg-sea-2 text-ink' } as const
 
-/** Small mono marker "3·2": decision-maker score, then team score. Zeros are dimmed. */
-export function ScorePair({ dm, team }: { dm: number; team: number }) {
+/** Two small marks: gold when the decision maker asked, sea when the team asked; hollow otherwise. */
+export function AskPair({ dm, team }: { dm: boolean; team: boolean }) {
   return (
-    <span className="text-[0.7rem] font-semibold tabular-nums" title={`decision maker ${dm}, team ${team}`}>
-      <span className={dm ? '' : 'opacity-40'}>{dm}</span>
-      <span className="opacity-40">·</span>
-      <span className={team ? '' : 'opacity-40'}>{team}</span>
+    <span className="inline-flex shrink-0 items-center gap-1" title={askedBy(dm, team)} aria-label={askedBy(dm, team)}>
+      <span aria-hidden className={`h-2.5 w-2.5 rounded-full border ${dm ? 'border-gold-3 bg-gold-3' : 'border-rule'}`} />
+      <span aria-hidden className={`h-2.5 w-2.5 rounded-full border ${team ? 'border-sea-3 bg-sea-3' : 'border-rule'}`} />
     </span>
   )
 }

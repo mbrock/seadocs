@@ -2,24 +2,25 @@
 //
 // Asks are usually collected in a sheet, not typed into this app cell by
 // cell. The organiser copies the sheet and pastes it here: a header row of
-// names, a first column of names, and 0–3 in the cells. Either side may be
+// names, a first column of names, and a mark (x, 1, yes…) in the cells where
+// there is an ask. Either side may be
 // the rows; names are matched loosely (case, accents, "Name | Org" vs "Name",
 // the short code) so that a sheet kept by hand still lines up.
 
 import { parseName, displayNames } from './names'
-import type { Id, Participant, Scores } from './scheduler'
+import type { Asks, Id, Participant } from './scheduler'
 import { pairKey } from './scheduler'
 
 export interface GridImport {
-  /** The parsed grid, keyed like the project's score tables. */
-  scores: Scores
+  /** The parsed grid, keyed like the project's ask tables. */
+  asks: Asks
   /** Which side the rows were (columns are the other). */
   rows: 'dm' | 'team'
   matchedTeams: number
   matchedDms: number
   /** Row and column labels that matched nobody. */
   unmatched: string[]
-  /** Cells that were neither blank nor 0–3 (an x counts as 1). */
+  /** Cells that were neither blank, a "no" (0, -, no) nor a mark (x, ✓, yes, 1–3). */
   unreadable: number
 }
 
@@ -68,11 +69,11 @@ function splitLine(line: string, delimiter: string): string[] {
   return out
 }
 
-function cellScore(raw: string): number | null {
+/** true = asked, false = not asked, null = unreadable. Old 0–3 sheets still read: anything above 0 is an ask. */
+function cellAsk(raw: string): boolean | null {
   const v = raw.trim().toLowerCase()
-  if (v === '' || v === '-' || v === '–') return 0
-  if (/^[0-3]$/.test(v)) return Number(v)
-  if (v === 'x' || v === '✓' || v === 'yes') return 1
+  if (v === '' || v === '-' || v === '–' || v === '0' || v === 'no') return false
+  if (/^[1-9]$/.test(v) || v === 'x' || v === '✓' || v === 'yes' || v === 'y') return true
   return null
 }
 
@@ -95,23 +96,23 @@ export function parseInterestGrid(text: string, teams: Participant[], dms: Parti
   const colIds = header.map(rows === 'dm' ? matchTeam : matchDm)
   const rowIds = rowLabels.map(rows === 'dm' ? matchDm : matchTeam)
 
-  const scores: Scores = {}
+  const asks: Asks = {}
   let unreadable = 0
   grid.slice(1).forEach((cells, r) => {
     const rowId = rowIds[r]
     if (!rowId) return
     colIds.forEach((colId, c) => {
       if (!colId) return
-      const s = cellScore(cells[c + 1] ?? '')
-      if (s === null) unreadable++
-      else if (s > 0) scores[rows === 'dm' ? pairKey(colId, rowId) : pairKey(rowId, colId)] = s
+      const a = cellAsk(cells[c + 1] ?? '')
+      if (a === null) unreadable++
+      else if (a) asks[rows === 'dm' ? pairKey(colId, rowId) : pairKey(rowId, colId)] = true
     })
   })
   const unmatched = [...header.filter((_, i) => !colIds[i]), ...rowLabels.filter((_, i) => !rowIds[i])].filter((l) => l.trim())
   const matchedCols = new Set(colIds.filter(Boolean)).size
   const matchedRows = new Set(rowIds.filter(Boolean)).size
   return {
-    scores,
+    asks,
     rows,
     matchedTeams: rows === 'dm' ? matchedCols : matchedRows,
     matchedDms: rows === 'dm' ? matchedRows : matchedCols,
