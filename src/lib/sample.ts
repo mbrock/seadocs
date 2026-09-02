@@ -12,7 +12,7 @@
 // and, on the team side, from where each project's money is likely to come from.
 
 import { pairKey, type Scores } from './scheduler'
-import { emptyProject, parseRoster, withParticipants, withScores, withSlots, type Project } from './project'
+import { emptyProject, parseRoster, withParticipants, withScores, withSlots, withTitle, type Project } from './project'
 
 /** Column order for the decision-maker rows below (the pitching order that day). */
 const TEAMS = [
@@ -108,7 +108,7 @@ function parseRows(rows: string[], width: number, key: (row: number, col: number
 }
 
 export function sampleProject(): Project {
-  let p = withParticipants(emptyProject(), TEAMS, parseRoster(DMS.join('\n')))
+  let p = withParticipants(withTitle(emptyProject(), 'Baltic Sea Docs 2026 · One-to-one meetings, day 1 · Thursday 10 September'), TEAMS, parseRoster(DMS.join('\n')))
   p = withSlots(p, SLOTS.length, SLOTS)
   const dmScores = parseRows(DM_ROWS, TEAMS.length, (d, t) => pairKey(p.teams[t].id, p.dms[d].id))
   const teamScores = parseRows(TEAM_ROWS, DMS.length, (t, d) => pairKey(p.teams[t].id, p.dms[d].id))

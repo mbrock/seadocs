@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { indexMeetings, type Id, type MeetingIndex, type Participant, type Side } from '../lib/scheduler'
-import { participantName, slotLabel, type Project } from '../lib/project'
+import { findIssues, indexMeetings, type Id, type MeetingIndex, type Participant, type Side } from '../lib/scheduler'
+import { participantName, slotLabel, tableLabel, type Project } from '../lib/project'
 import { download, personalCsv } from '../lib/csv'
 import { Button, Chooser, Empty, OnlineMark, Panel, PanelHeader } from './ui'
 import { useNames } from './useNames'
@@ -13,6 +13,8 @@ interface Props {
 export function SchedulesPanel({ project }: Props) {
   const hasBoard = project.meetings.length > 0
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
+  const problems = useMemo(() => findIssues(project.meetings).length, [project.meetings])
+  const blocked = problems > 0 ? `Fix the ${problems === 1 ? 'problem' : `${problems} problems`} on the board first` : undefined
   const [chosen, setChosen] = useState<Id | null>(null)
   const [printAll, setPrintAll] = useState(false)
   const names = useNames(project)
@@ -40,8 +42,12 @@ export function SchedulesPanel({ project }: Props) {
       <div className={`grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] ${printAll ? 'print:hidden' : ''}`}>
         <Panel className="lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:overflow-auto print:hidden">
           <PanelHeader title="Who">
-            <Button onClick={printEveryone}>Print all</Button>
-            <Button onClick={() => download('running-orders.csv', personalCsv(project), 'text/csv')}>CSV</Button>
+            <Button onClick={printEveryone} disabled={!!blocked} title={blocked}>
+              Print all
+            </Button>
+            <Button onClick={() => download('running-orders.csv', personalCsv(project), 'text/csv')} disabled={!!blocked} title={blocked}>
+              CSV
+            </Button>
           </PanelHeader>
           <Chooser
             label="Person"
@@ -59,7 +65,9 @@ export function SchedulesPanel({ project }: Props) {
         {current && (
           <Panel className="print:border-0">
             <PanelHeader title="Running order" className="print:hidden">
-              <Button onClick={() => window.print()}>Print</Button>
+              <Button onClick={() => window.print()} disabled={!!blocked} title={blocked}>
+                Print
+              </Button>
             </PanelHeader>
             <RunningOrder project={project} index={index} person={current.person} side={current.side} />
           </Panel>
@@ -84,17 +92,19 @@ function RunningOrder({ project, index, person, side }: { project: Project; inde
   const other: Side = side === 'team' ? 'dm' : 'team'
   const meetingAt = (slot: Id) => (side === 'dm' ? index.byCell.get(`${slot}|${person.id}`) : index.byTeamSlot.get(`${slot}|${person.id}`))
   const meetings = project.slots.filter((s) => meetingAt(s.id)).length
+  const where = side === 'dm' ? tableLabel(project, person.id) : ''
   return (
     <article className="px-3 py-3 print:px-0">
       <div className="mb-4 border-b-2 border-ink pb-2">
-        <div className="eyebrow">{side === 'team' ? 'Project team' : 'Decision maker'} · one-to-one meetings</div>
+        <div className="eyebrow">{project.title || 'One-to-one meetings'}</div>
         <h3 className="text-[1.4rem] leading-tight font-extrabold tracking-[-0.03em]">
           {person.name}
           <OnlineMark show={person.online} />
         </h3>
         <div className="mt-1 text-[0.85rem] text-muted">
-          {meetings} {meetings === 1 ? 'meeting' : 'meetings'} · {project.slots.length} slots
-          {person.online && ' · joins online'}
+          {side === 'team' ? 'Project team' : 'Decision maker'} · {meetings} {meetings === 1 ? 'meeting' : 'meetings'} in {project.slots.length} slots
+          {side === 'dm' && where && ` · ${where === 'online' ? 'joins online' : where}`}
+          {side === 'team' && person.online && ' · joins online'}
         </div>
       </div>
       <table className="w-full border-collapse text-[0.95rem]">
@@ -118,11 +128,25 @@ function RunningOrder({ project, index, person, side }: { project: Project; inde
                     '—'
                   )}
                 </td>
+                {side === 'team' && (
+                  <td className="w-[6rem] py-2 text-right text-[0.85rem] text-muted whitespace-nowrap">{partnerId ? tableLabel(project, partnerId) : ''}</td>
+                )}
               </tr>
             )
           })}
         </tbody>
       </table>
+      <div className="mt-3 text-[0.75rem] text-muted">
+        <PrintedAt />
+      </div>
     </article>
   )
+}
+
+/** "printed 14:05" — so a reprinted sheet can be told from an older one. */
+function PrintedAt() {
+  const now = new Date()
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  return <>printed {hh}:{mm}</>
 }

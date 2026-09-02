@@ -34,6 +34,7 @@ function fromV3(d: Record<string, unknown>): Project {
   const slots = Array.isArray(d.slots) ? d.slots.filter(isSlot).map(({ id, label }) => ({ id, label })) : []
   return prune({
     ...emptyProject(),
+    title: typeof d.title === 'string' ? d.title : '',
     teams: (d.teams as Participant[]).map(cleanParticipant),
     dms: (d.dms as Participant[]).map(cleanParticipant),
     slots: slots.length ? slots : emptyProject().slots,
@@ -119,8 +120,11 @@ function isParticipant(p: unknown): p is Participant {
   return isRecord(p) && typeof p.id === 'string' && typeof p.name === 'string'
 }
 
-function cleanParticipant({ id, name, online }: Participant): Participant {
-  return online === true ? { id, name, online } : { id, name }
+function cleanParticipant({ id, name, online, code }: Participant): Participant {
+  const p: Participant = { id, name }
+  if (online === true) p.online = true
+  if (typeof code === 'string' && code.trim()) p.code = code.trim()
+  return p
 }
 
 function isSlot(s: unknown): s is Slot {

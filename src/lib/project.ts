@@ -12,6 +12,8 @@ export const MAX_SLOTS = 60
 export type ScoreKind = 'dm' | 'team'
 
 export interface Project {
+  /** Event and day, for printed running orders: "Baltic Sea Docs 2026 · Day 1, 10 September". */
+  title: string
   teams: Participant[]
   dms: Participant[]
   /** In time order. Labels may be empty; slotLabel() fills them in. */
@@ -27,6 +29,7 @@ export interface Project {
 export function emptyProject(): Project {
   return withSlotCount(
     {
+      title: '',
       teams: [],
       dms: [],
       slots: [],
@@ -40,10 +43,14 @@ export function emptyProject(): Project {
   )
 }
 
-/** A participant as typed in the roster: a name, with a trailing `*` meaning "joins online". */
+/**
+ * A participant as typed in the roster: a name, an optional ` = CODE` giving
+ * the short form to use in dense tables, and a trailing `*` meaning "joins online".
+ */
 export interface RosterEntry {
   name: string
   online: boolean
+  code?: string
 }
 
 /** One entry per line, trimmed, blanks and duplicate names dropped. */
@@ -51,12 +58,15 @@ export function parseRoster(text: string): RosterEntry[] {
   const seen = new Set<string>()
   const out: RosterEntry[] = []
   for (const raw of text.split('\n')) {
-    const line = raw.trim()
+    let line = raw.trim()
     const online = line.endsWith('*')
-    const name = (online ? line.slice(0, -1) : line).trim()
+    if (online) line = line.slice(0, -1).trim()
+    const eq = line.lastIndexOf(' = ')
+    const code = eq >= 0 ? line.slice(eq + 3).trim() : ''
+    const name = (eq >= 0 ? line.slice(0, eq) : line).trim()
     if (name && !seen.has(name)) {
       seen.add(name)
-      out.push({ name, online })
+      out.push(code ? { name, online, code } : { name, online })
     }
   }
   return out
@@ -68,7 +78,11 @@ export function parseNames(text: string): string[] {
 
 /** The roster text for a list of participants (inverse of parseRoster). */
 export function rosterText(people: Participant[]): string {
-  return people.map((p) => (p.online ? `${p.name} *` : p.name)).join('\n')
+  return people.map((p) => `${p.name}${p.code ? ` = ${p.code}` : ''}${p.online ? ' *' : ''}`).join('\n')
+}
+
+export function withTitle(project: Project, title: string): Project {
+  return { ...project, title: title.trim() }
 }
 
 export function parseLines(text: string): string[] {
@@ -82,6 +96,16 @@ export function parseLines(text: string): string[] {
 export function slotLabel(project: Project, slotId: Id): string {
   const i = project.slots.findIndex((s) => s.id === slotId)
   return project.slots[i]?.label || `Slot ${i + 1}`
+}
+
+/**
+ * Where a decision maker sits: decision makers stay put and teams walk, so each
+ * gets a table numbered by roster position; one joining online has none.
+ */
+export function tableLabel(project: Project, dmId: Id): string {
+  const i = project.dms.findIndex((d) => d.id === dmId)
+  if (i < 0) return ''
+  return project.dms[i].online ? 'online' : `Table ${i + 1}`
 }
 
 export function participantName(project: Project, id: Id): string {
@@ -103,9 +127,12 @@ export function withParticipants(project: Project, teams: (RosterEntry | string)
 
 function reconcile(existing: Participant[], entries: RosterEntry[], prefix: string, counter: { next: number }): Participant[] {
   const byName = new Map(existing.map((p) => [p.name, p]))
-  return entries.map(({ name, online }) => {
+  return entries.map(({ name, online, code }) => {
     const id = byName.get(name)?.id ?? `${prefix}${counter.next++}`
-    return online ? { id, name, online } : { id, name }
+    const p: Participant = { id, name }
+    if (online) p.online = true
+    if (code) p.code = code
+    return p
   })
 }
 

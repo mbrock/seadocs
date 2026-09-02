@@ -207,7 +207,7 @@ export function displayNames(people: Participant[]): Map<Id, DisplayName> {
     const short = (seen.get(shorts[i]) ?? 0) > 1 ? person : shorts[i]
     const affiliation = [org, country].filter(Boolean).join(', ')
     const personCode = (surnameSeen.get(surnames[i]) ?? 0) > 1 ? short : surnames[i]
-    out.set(p.id, { short, code: codes.get(p.id) ?? personCode, tag: countryCode(country), affiliation })
+    out.set(p.id, { short, code: p.code ?? codes.get(p.id) ?? personCode, tag: countryCode(country), affiliation })
   })
   return out
 }

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   assignCell,
+  assignEffect,
   computeStats,
   findIssues,
   indexMeetings,
@@ -8,14 +9,17 @@ import {
   rankOf,
   scoreOf,
   SCORE_LABELS,
+  type AssignEffect,
   type Id,
   type Issue,
   type MeetingIndex,
+  type Pair,
   type Participant,
   type PlacedMeeting,
   type Side,
   type Stats,
 } from '../lib/scheduler'
+import { measure, requestedCounts, type Objectives, type ObjectiveKey } from '../lib/objectives'
 import { participantName, slotLabel, withMeetings, type Project } from '../lib/project'
 import { boardCsv, download } from '../lib/csv'
 import { generate, isFresh, type Generated } from '../lib/generate'
@@ -31,7 +35,7 @@ interface Props {
   onGenerated: (g: Generated) => void
 }
 
-/** A board cell: one slot for one participant on the `side` shown across the top. */
+/** A board cell: one slot for one participant on the `side` shown down the left. */
 interface Cell {
   slot: Id
   side: Side
@@ -72,31 +76,10 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <Panel>
-          <PanelHeader title="Boards">
-            <Button variant="primary" disabled={!hasPeople} onClick={run}>
-              {hasBoard ? 'Generate again' : 'Generate'}
-            </Button>
-            <Button disabled={!hasBoard} onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}>
-              CSV
-            </Button>
-          </PanelHeader>
-          {fresh ? (
-            <Frontier project={project} alternatives={generated.alternatives} onPick={setMeetings} />
-          ) : hasBoard ? (
-            <p className="px-3 py-3 text-[0.85rem] text-muted">
-              {generated ? 'People, interest or slots changed since these boards were generated.' : 'This board was loaded from the saved project.'} Generate to
-              see the alternatives.
-            </p>
-          ) : (
-            <Empty>{hasPeople ? 'Generate to build the best boards from the interest grids.' : 'Add people and interest first.'}</Empty>
-          )}
-        </Panel>
-
-        <Panel>
-          <PanelHeader title={`Board · ${project.meetings.length} meetings`}>
-            <Key />
+      <Panel className="min-w-0">
+        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'}>
+          {hasBoard && <Key />}
+          {hasBoard && (
             <Segmented
               label="Rows"
               size="sm"
@@ -110,14 +93,25 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
                 { value: 'team', label: 'Teams' },
               ]}
             />
-          </PanelHeader>
-          {hasBoard ? (
-            <Grid project={project} names={names} index={index} rows={rows} selected={selected} onSelect={setCell} />
-          ) : (
-            <Empty>No board yet.</Empty>
           )}
-        </Panel>
-      </div>
+          <Button variant="primary" disabled={!hasPeople} onClick={run}>
+            {hasBoard ? 'Generate again' : 'Generate'}
+          </Button>
+          <Button
+            disabled={!hasBoard || issues.length > 0}
+            title={issues.length > 0 ? 'Fix the problems first' : 'Download the board as a spreadsheet'}
+            onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
+          >
+            CSV
+          </Button>
+        </PanelHeader>
+        {hasBoard && <Frontier project={project} generated={generated} fresh={fresh} onPick={setMeetings} />}
+        {hasBoard ? (
+          <Grid project={project} names={names} index={index} rows={rows} selected={selected} onSelect={setCell} />
+        ) : (
+          <Empty>{hasPeople ? 'Generate builds the board from the interest grids.' : 'Add people and interest first.'}</Empty>
+        )}
+      </Panel>
 
       <aside
         className={
@@ -129,11 +123,18 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
         {selected ? (
           <Inspector project={project} names={names} index={index} cell={selected} onAssign={setMeetings} onClose={() => setCell(null)} />
         ) : (
-          <Summary project={project} names={names} stats={stats} issues={issues} hasBoard={hasBoard} />
+          <Summary project={project} names={names} index={index} stats={stats} issues={issues} hasBoard={hasBoard} />
         )}
       </aside>
     </div>
   )
+}
+
+/** Three-step bar: how much the team asked for this meeting. */
+function TeamBar({ score, className = '' }: { score: number; className?: string }) {
+  if (!score) return null
+  const height = ['', 'h-1/3', 'h-2/3', 'h-full'][score]
+  return <span aria-hidden className={`w-[3px] bg-sea-3 ${height} ${className}`} />
 }
 
 /** Rows = one side (decision makers or teams), columns = slots. */
@@ -185,7 +186,8 @@ function Grid({
                 const partner = m ? partnerOf(m) : undefined
                 const dmScore = m ? scoreOf(project.dmScores, m.team, m.dm) : 0
                 const teamScore = m ? scoreOf(project.teamScores, m.team, m.dm) : 0
-                const duplicate = m ? (index.byPair.get(pairKey(m.team, m.dm))?.length ?? 0) > 1 : false
+                // Only a loaded file can contain a repeat; the editor refuses to create one.
+                const repeat = m ? (index.byPair.get(pairKey(m.team, m.dm))?.length ?? 0) > 1 : false
                 const active = selected?.slot === slot.id && selected.anchor === person.id
                 return (
                   <td key={slot.id} className="border-r border-b border-rule/70 p-0">
@@ -193,21 +195,19 @@ function Grid({
                       type="button"
                       aria-pressed={active}
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${partner ? partner.name : 'free'}`}
-                      title={partner ? `${partner.name} · decision maker ${dmScore}, team ${teamScore}` : 'free'}
+                      title={partner ? `${partner.name} · decision maker ${SCORE_LABELS[dmScore]}, team ${SCORE_LABELS[teamScore]}` : 'free'}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
                       className={`relative flex h-8 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
-                      } ${duplicate ? 'bg-warn-soft text-warn' : scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'} ${
-                        partner && !duplicate && dmScore === 0 && teamScore === 0 ? 'text-muted' : ''
-                      }`}
+                      } ${scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'} ${partner && dmScore === 0 && teamScore === 0 ? 'text-muted' : ''}`}
                     >
                       {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : <span>·</span>}
-                      {duplicate && (
-                        <span aria-label="meets twice" className="ml-auto pl-1 text-[0.65rem] font-bold">
+                      {repeat && (
+                        <span aria-label="meets twice" className="ml-auto pl-1 text-[0.65rem] font-bold text-warn">
                           ×2
                         </span>
                       )}
-                      {teamScore > 0 && <span aria-hidden className="absolute right-1 bottom-1 h-1 w-1 rounded-full bg-sea-3" />}
+                      <TeamBar score={teamScore} className="absolute right-0 bottom-0" />
                     </button>
                   </td>
                 )
@@ -220,7 +220,7 @@ function Grid({
   )
 }
 
-/** What the cell colours mean. Tint = how much the decision maker asked; the dot = the team asked too. */
+/** What the cell colours mean: tint = how much the decision maker asked; the bar at the right edge = how much the team asked. */
 function Key() {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -235,18 +235,23 @@ function Key() {
       >
         DM asked 1 · 2 · 3
       </KeyItem>
-      <KeyItem swatch={<span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-sea-3" />}>team asked</KeyItem>
-      <KeyItem swatch={<Swatch className="bg-paper" />}>
-        <span className="text-muted">nobody asked</span>
+      <KeyItem
+        swatch={
+          <span className="inline-flex h-3 items-end gap-[3px]">
+            <TeamBar score={1} />
+            <TeamBar score={2} />
+            <TeamBar score={3} />
+          </span>
+        }
+      >
+        team asked 1 · 2 · 3
       </KeyItem>
-      <KeyItem swatch={<Swatch className="bg-warn-soft" />}>
-        <span className="text-warn">×2 meets twice</span>
-      </KeyItem>
+      <KeyItem swatch={<Swatch className="bg-paper" />}>nobody asked</KeyItem>
     </div>
   )
 }
 
-/** The selected cell: who is there, and everyone who could be, with what it would cost. */
+/** The selected cell: who is there, and everyone who could be, with what it would do. */
 function Inspector({
   project,
   names,
@@ -268,37 +273,50 @@ function Inspector({
   const candidates: Participant[] = other === 'team' ? project.teams : project.dms
   const meeting = side === 'dm' ? index.byCell.get(`${slot}|${anchor}`) : index.byTeamSlot.get(`${slot}|${anchor}`)
   const current = meeting ? meeting[other] : null
-  const scoresFor = (partner: Id) => {
-    const team = side === 'dm' ? partner : anchor
-    const dm = side === 'dm' ? anchor : partner
-    return { team, dm, dmScore: scoreOf(project.dmScores, team, dm), teamScore: scoreOf(project.teamScores, team, dm) }
-  }
-  const busyWith = (partner: Id) => {
-    const m = other === 'team' ? index.byTeamSlot.get(`${slot}|${partner}`) : index.byCell.get(`${slot}|${partner}`)
-    return m ? m[side] : null
-  }
+  const scoresFor = (team: Id, dm: Id) => ({ dm: scoreOf(project.dmScores, team, dm), team: scoreOf(project.teamScores, team, dm) })
+  const pairWith = (partner: Id) => (side === 'dm' ? { team: partner, dm: anchor } : { team: anchor, dm: partner })
   const load = new Map<Id, number>()
   for (const m of project.meetings) load.set(m[other], (load.get(m[other]) ?? 0) + 1)
 
-  const rows = candidates
+  const rows: CandidateRow[] = candidates
     .filter((c) => c.id !== current)
     .map((c) => {
-      const s = scoresFor(c.id)
-      const met = index.byPair.get(pairKey(s.team, s.dm))
-      const swapWith = busyWith(c.id)
-      // A swap hands the current occupant to `swapWith`: that second pair has its own scores, and may already meet elsewhere.
-      const swapPair = swapWith !== null && current !== null ? (side === 'dm' ? { team: current, dm: swapWith } : { team: swapWith, dm: current }) : null
-      const swapScores = swapPair ? { dm: scoreOf(project.dmScores, swapPair.team, swapPair.dm), team: scoreOf(project.teamScores, swapPair.team, swapPair.dm) } : null
-      const swapRepeats = swapPair !== null && index.byPair.has(pairKey(swapPair.team, swapPair.dm))
-      return { person: c, ...s, rank: s.dmScore * 4 + s.teamScore, alreadyAt: met?.[0]?.slot ?? null, swapWith, swapScores, swapRepeats }
+      const p = pairWith(c.id)
+      const s = scoresFor(p.team, p.dm)
+      return { person: c, dmScore: s.dm, teamScore: s.team, rank: s.dm * 4 + s.team, effect: assignEffect(project.meetings, slot, side, anchor, c.id) }
     })
-    // Strongest request first; pairs that already meet sink to the bottom since they cannot be picked.
-    .sort((a, b) => Number(a.alreadyAt !== null) - Number(b.alreadyAt !== null) || b.rank - a.rank || a.person.name.localeCompare(b.person.name))
+    // Strongest request first; repeats sink to the bottom since they cannot be picked.
+    .sort((a, b) => Number(a.effect.kind === 'repeat') - Number(b.effect.kind === 'repeat') || b.rank - a.rank || a.person.name.localeCompare(b.person.name))
   const requested = rows.filter((r) => r.rank > 0)
   const unrequested = rows.filter((r) => r.rank === 0)
 
   const assign = (partner: Id | null) => onAssign(assignCell(project.meetings, slot, side, anchor, partner))
-  const cur = current ? scoresFor(current) : null
+  const cur = current ? scoresFor(pairWith(current).team, pairWith(current).dm) : null
+  const code = (id: Id) => names.get(id)?.code ?? participantName(project, id)
+
+  /** One line on what picking this candidate does to the rest of the board. */
+  const effectLine = (e: AssignEffect): ReactNode => {
+    switch (e.kind) {
+      case 'clear':
+      case 'free':
+        return 'free'
+      case 'move':
+        return (
+          <>
+            moves from {code(e.displaced)} <span className="text-warn">· leaves {code(e.displaced)} free</span>
+          </>
+        )
+      case 'swap':
+        return (
+          <>
+            swap · {code(e.displaced)} gets {code(e.second[other])} <ScorePair {...scoresFor(e.second.team, e.second.dm)} />
+          </>
+        )
+      case 'repeat':
+        return e[side] === anchor ? `already meet at ${slotLabel(project, e.at)}` : `${code(e[side])} already meets ${code(e[other])}`
+    }
+  }
+  const list = (list: CandidateRow[]) => <CandidateList rows={list} project={project} names={names} onPick={assign} load={load} effectLine={effectLine} />
 
   return (
     <div className="flex flex-col">
@@ -322,7 +340,7 @@ function Inspector({
               <div className="eyebrow">Meets</div>
               <div className="truncate font-semibold">{participantName(project, current)}</div>
               <div className="text-[0.8rem] text-muted">
-                decision maker {SCORE_LABELS[cur.dmScore]} · team {SCORE_LABELS[cur.teamScore]}
+                decision maker {SCORE_LABELS[cur.dm]} · team {SCORE_LABELS[cur.team]}
               </div>
             </div>
             <Button onClick={() => assign(null)}>Free</Button>
@@ -334,11 +352,11 @@ function Inspector({
 
       <div className="px-3 py-3">
         <div className="eyebrow mb-1">{current ? 'Replace with' : 'Assign'}</div>
-        <CandidateList rows={requested} project={project} names={names} onPick={assign} load={load} current={current} />
+        {list(requested)}
         {unrequested.length > 0 && (
           <details className="mt-2">
             <summary className="cursor-pointer text-[0.8rem] text-muted">{unrequested.length} nobody asked for</summary>
-            <CandidateList rows={unrequested} project={project} names={names} onPick={assign} load={load} current={current} />
+            {list(unrequested)}
           </details>
         )}
       </div>
@@ -350,11 +368,8 @@ interface CandidateRow {
   person: Participant
   dmScore: number
   teamScore: number
-  alreadyAt: Id | null
-  swapWith: Id | null
-  /** Scores of the pair a swap would create (`swapWith` + the current occupant); null when the cell is free. */
-  swapScores: { dm: number; team: number } | null
-  swapRepeats: boolean
+  rank: number
+  effect: AssignEffect
 }
 
 function CandidateList({
@@ -363,57 +378,33 @@ function CandidateList({
   names,
   onPick,
   load,
-  current,
+  effectLine,
 }: {
   rows: CandidateRow[]
   project: Project
   names: Map<Id, DisplayName>
   onPick: (id: Id) => void
   load: Map<Id, number>
-  /** Who sits in the cell now; a swap hands them to the candidate's current partner. */
-  current: Id | null
+  effectLine: (e: AssignEffect) => ReactNode
 }) {
   if (!rows.length) return <p className="py-1 text-[0.8rem] text-muted">Nobody.</p>
-  const code = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   return (
     <ul className="divide-y divide-rule">
       {rows.map((r) => {
-        const already = r.alreadyAt !== null
+        const repeat = r.effect.kind === 'repeat'
         return (
           <li key={r.person.id}>
             <button
               type="button"
-              disabled={already}
+              disabled={repeat}
               onClick={() => onPick(r.person.id)}
-              title={
-                already
-                  ? `They already meet at ${slotLabel(project, r.alreadyAt!)} — a second meeting would be a repeat`
-                  : r.swapWith && current
-                    ? `Swap: ${participantName(project, r.swapWith)} gets ${participantName(project, current)} instead`
-                    : r.swapWith
-                      ? `Moves here from ${participantName(project, r.swapWith)}, whose slot becomes free`
-                      : 'Free in this slot'
-              }
+              title={repeat ? 'A pair meets at most once a day' : undefined}
               className="flex w-full cursor-pointer items-center justify-between gap-2 py-1.5 text-left hover:bg-canvas disabled:cursor-default disabled:opacity-45"
             >
               <span className="min-w-0">
                 <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
                 <span className="block text-[0.75rem] text-muted">
-                  {already ? (
-                    `already meet at ${slotLabel(project, r.alreadyAt!)}`
-                  ) : r.swapWith && current && r.swapScores ? (
-                    <>
-                      swap · {code(r.swapWith)} gets {code(current)}{' '}
-                      {r.swapRepeats ? <span className="text-warn">again — they already meet</span> : <ScorePair dm={r.swapScores.dm} team={r.swapScores.team} />}
-                    </>
-                  ) : r.swapWith ? (
-                    <>
-                      moves from {code(r.swapWith)} <span className="text-warn">· leaves {code(r.swapWith)} free</span>
-                    </>
-                  ) : (
-                    'free'
-                  )}{' '}
-                  · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
+                  {effectLine(r.effect)} · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
                 </span>
               </span>
               <ScorePair dm={r.dmScore} team={r.teamScore} />
@@ -429,27 +420,52 @@ function CandidateList({
 function Summary({
   project,
   names,
+  index,
   stats,
   issues,
   hasBoard,
 }: {
   project: Project
   names: Map<Id, DisplayName>
+  index: MeetingIndex
   stats: Stats
   issues: Issue[]
   hasBoard: boolean
 }) {
+  const objectives: Objectives = useMemo(() => measure(project, project.meetings), [project])
+  const asked = useMemo(() => requestedCounts(project), [project])
   if (!hasBoard) return null
   const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
+  const met = (key: ObjectiveKey) => `${(asked[key] ?? 0) - objectives[key]}/${asked[key] ?? 0}`
+
+  // Why a requested pair got no meeting: who is full, or where they could still fit.
+  const load = new Map<Id, number>()
+  for (const m of project.meetings) {
+    load.set(m.team, (load.get(m.team) ?? 0) + 1)
+    load.set(m.dm, (load.get(m.dm) ?? 0) + 1)
+  }
+  const full = (id: Id) => (load.get(id) ?? 0) >= project.slots.length
+  const why = (p: Pair): string => {
+    if (full(p.dm) && full(p.team)) return 'both full'
+    if (full(p.dm)) return 'DM full'
+    if (full(p.team)) return 'team full'
+    const open = project.slots.find((s) => !index.byCell.has(`${s.id}|${p.dm}`) && !index.byTeamSlot.has(`${s.id}|${p.team}`))
+    return open ? `both free at ${label(open.id)}` : 'no shared free slot'
+  }
+
   return (
     <Panel>
       <PanelHeader title="This board" />
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-3 py-3">
         <Figure value={`${stats.meetings}/${stats.capacity}`} label="meetings possible" />
-        <Figure value={`${stats.mustMeetSatisfied}/${stats.mustMeetRequested}`} label="must-meets" tone={stats.mustMeetSatisfied < stats.mustMeetRequested ? 'warn' : 'ink'} />
-        <Figure value={`${stats.dmSatisfied}/${stats.dmRequested}`} label="DM asks met" />
-        <Figure value={`${stats.teamSatisfied}/${stats.teamRequested}`} label="team asks met" />
+        <Figure value={met('missedMust')} label="must-meets" tone={objectives.missedMust > 0 ? 'warn' : 'ink'} />
+        <Figure value={met('missedPriority')} label="priorities" />
+        <Figure value={met('missedInterested')} label="interested" />
+        <Figure value={met('missedTeam')} label="team asks" />
+        <Figure value={objectives.dmGaps} label="DM windows" tone={objectives.dmGaps ? 'ink' : 'muted'} />
+        {project.teamFloor > 0 && <Figure value={objectives.teamsShort} label={`teams under ${project.teamFloor}`} tone={objectives.teamsShort ? 'warn' : 'muted'} />}
+        {objectives.fillers > 0 && <Figure value={objectives.fillers} label="nobody asked" tone="muted" />}
       </div>
       {issues.length > 0 && (
         <div className="border-t border-rule px-3 py-3">
@@ -463,6 +479,7 @@ function Summary({
               </li>
             ))}
           </ul>
+          <p className="mt-1 text-[0.75rem] text-muted">Click the cell to fix it. Export is off until the board is clean.</p>
         </div>
       )}
       <div className="border-t border-rule px-3 py-3">
@@ -483,6 +500,7 @@ function Summary({
                       {name(p.team)} <span className="text-muted">→</span> {name(p.dm)}
                     </>
                   )}
+                  <span className="ml-1.5 text-[0.7rem] text-muted">{why(p)}</span>
                 </span>
                 <ScorePair dm={p.dmScore} team={p.teamScore} />
               </li>

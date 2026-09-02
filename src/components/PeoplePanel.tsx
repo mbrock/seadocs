@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { sampleProject } from '../lib/sample'
 import { demoProject } from '../lib/fixtures'
-import { parseLines, parseRoster, rosterText, withParticipants, withSlots, withTeamFloor, type Project } from '../lib/project'
+import { parseLines, parseRoster, rosterText, withParticipants, withSlots, withTeamFloor, withTitle, type Project } from '../lib/project'
 import { Button, Label, Panel, PanelHeader, inputClass, textareaClass } from './ui'
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 }
 
 interface Drafts {
+  title: string
   teamsText: string
   dmsText: string
   slotCount: string
@@ -19,6 +20,7 @@ interface Drafts {
 
 function draftsFrom(project: Project): Drafts {
   return {
+    title: project.title,
     teamsText: rosterText(project.teams),
     dmsText: rosterText(project.dms),
     slotCount: String(project.slots.length),
@@ -47,6 +49,7 @@ export function PeoplePanel({ project, onChange }: Props) {
     let next = withParticipants(project, parseRoster(drafts.teamsText), parseRoster(drafts.dmsText))
     next = withSlots(next, drafts.slotCount, parseLines(drafts.labelsText))
     next = withTeamFloor(next, drafts.teamFloor)
+    next = withTitle(next, drafts.title)
     onChange(next)
   }
 
@@ -63,6 +66,9 @@ export function PeoplePanel({ project, onChange }: Props) {
             value={drafts.teamsText}
             onChange={(e) => edit({ teamsText: e.target.value })}
           />
+          <p className="mt-2 text-[0.8rem] text-muted">
+            One title per line. The board shows a one-word code picked from the title; write <b>Title = CODE</b> to choose it yourself.
+          </p>
         </div>
       </Panel>
 
@@ -78,15 +84,27 @@ export function PeoplePanel({ project, onChange }: Props) {
             onChange={(e) => edit({ dmsText: e.target.value })}
           />
           <p className="mt-2 text-[0.8rem] text-muted">
-            One per line as <b>Name | Organisation, Country</b> — the country becomes a tag and long names are shortened on the board. A trailing <b>*</b> marks someone joining online.
+            One per line as <b>Name | Organisation, Country</b> — the country becomes a tag and long names are shortened on the board. A trailing <b>*</b> marks someone joining online. <b>Name = CODE</b> sets the short form.
           </p>
         </div>
       </Panel>
 
       <div className="flex flex-col gap-3">
         <Panel>
-          <PanelHeader title="Slots" />
+          <PanelHeader title="Day" />
           <div className="grid gap-3 p-4">
+            <div>
+              <Label htmlFor="eventTitle">Event</Label>
+              <input
+                id="eventTitle"
+                type="text"
+                className={`${inputClass} w-full`}
+                placeholder="Baltic Sea Docs 2026 · One-to-one meetings, day 1"
+                value={drafts.title}
+                onChange={(e) => edit({ title: e.target.value })}
+              />
+              <p className="mt-1 text-[0.8rem] text-muted">Printed at the top of every running order.</p>
+            </div>
             <div>
               <Label htmlFor="slotCount">Number of slots</Label>
               <input

@@ -20,6 +20,8 @@ export interface Participant {
   name: string
   /** Joins by video rather than in the room. Informational for now. */
   online?: boolean
+  /** Hand-picked short form for dense tables, overriding the derived one ("EUROPE"). */
+  code?: string
 }
 
 /** 0 = none, 1 = interested, 2 = priority, 3 = must-meet */
@@ -229,11 +231,49 @@ export type Side = 'team' | 'dm'
 const otherSide = (side: Side): Side => (side === 'team' ? 'dm' : 'team')
 
 /**
- * Change who `anchor` (a team or a dm, per `side`) meets in `slot`. `partner
- * === null` frees the cell. If the partner is already booked with someone else
- * in that slot, the two meetings swap partners. Returns a new meetings array.
+ * What putting `partner` into `anchor`'s cell at `slot` would do:
+ *   clear   — the cell is emptied (partner null)
+ *   free    — the partner is free then; one meeting is added (replacing the current one, if any)
+ *   move    — the partner is with `displaced` then, and the cell is empty: their meeting moves here, `displaced` is left free
+ *   swap    — the partner is with `displaced` then, and the cell is taken: the two meetings trade partners
+ *   repeat  — the change would make some pair meet twice in the day; never applied
+ * A pair meeting twice is nonsense in this format (each seat a repeat takes is
+ * a requested meeting that did not fit), so it is refused rather than flagged.
+ */
+export type AssignEffect =
+  | { kind: 'clear' }
+  | { kind: 'free' }
+  | { kind: 'move'; displaced: Id }
+  | { kind: 'swap'; displaced: Id; /** the pair the displaced person ends up in */ second: Meeting }
+  | { kind: 'repeat'; team: Id; dm: Id; at: Id }
+
+export function assignEffect(meetings: PlacedMeeting[], slot: Id, side: Side, anchor: Id, partner: Id | null): AssignEffect {
+  if (partner === null) return { kind: 'clear' }
+  const other = otherSide(side)
+  const pairOf = (a: Id, b: Id): Meeting => (side === 'dm' ? { dm: a, team: b } : { team: a, dm: b })
+  const meetsElsewhere = (m: Meeting) => meetings.find((x) => x.team === m.team && x.dm === m.dm && x.slot !== slot)
+  const wanted = pairOf(anchor, partner)
+  const already = meetsElsewhere(wanted)
+  if (already) return { kind: 'repeat', ...wanted, at: already.slot }
+  const current = meetings.find((m) => m.slot === slot && m[side] === anchor) ?? null
+  const busy = meetings.find((m) => m.slot === slot && m[other] === partner) ?? null
+  if (!busy) return { kind: 'free' }
+  const displaced = busy[side]
+  if (!current) return { kind: 'move', displaced }
+  const second = pairOf(displaced, current[other])
+  const secondAlready = meetsElsewhere(second)
+  if (secondAlready) return { kind: 'repeat', ...second, at: secondAlready.slot }
+  return { kind: 'swap', displaced, second }
+}
+
+/**
+ * Change who `anchor` (a team or a dm, per `side`) meets in `slot`, per
+ * `assignEffect`. Returns a new meetings array; unchanged when the effect
+ * would be a repeat.
  */
 export function assignCell(meetings: PlacedMeeting[], slot: Id, side: Side, anchor: Id, partner: Id | null): PlacedMeeting[] {
+  const effect = assignEffect(meetings, slot, side, anchor, partner)
+  if (effect.kind === 'repeat') return meetings
   const other = otherSide(side)
   const current = meetings.find((m) => m.slot === slot && m[side] === anchor) ?? null
   const out = meetings.filter((m) => m !== current)
@@ -283,8 +323,9 @@ export type Issue =
   | { type: 'dm-clash'; dm: Id; slot: Id }
 
 /**
- * Problems a generated schedule never has, but manual editing can introduce:
- * the same pair meeting twice, or someone booked twice in one slot.
+ * Problems neither generation nor the editor can produce, but a hand-written
+ * or old project file might: the same pair meeting twice, or someone booked
+ * twice in one slot.
  */
 export function findIssues(meetings: PlacedMeeting[]): Issue[] {
   const issues: Issue[] = []

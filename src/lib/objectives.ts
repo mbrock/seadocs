@@ -13,14 +13,16 @@ import { allPairs, MAX_SCORE, pairKey, slotIndex, type Id, type PlacedMeeting, t
 export interface Objectives {
   /** Decision-maker must-meets (score 3) that did not get a meeting. */
   missedMust: number
-  /** Sum of decision-maker scores over requested pairs that did not meet. */
-  dmLoss: number
+  /** Decision-maker priority asks (score 2) that did not get a meeting. */
+  missedPriority: number
+  /** Decision-maker "interested" asks (score 1) that did not get a meeting. */
+  missedInterested: number
   /** Teams with fewer than `teamFloor` meetings. */
   teamsShort: number
   /** Idle slots inside a decision maker's day (between their first and last meeting), summed. */
   dmGaps: number
-  /** Sum of team scores over requested pairs that did not meet. */
-  teamLoss: number
+  /** Team asks (any score) that did not get a meeting. */
+  missedTeam: number
   /** Meetings that neither side asked for. */
   fillers: number
   /** Idle slots inside a team's day, summed. */
@@ -29,16 +31,40 @@ export interface Objectives {
 
 export type ObjectiveKey = keyof Objectives
 
-/** In priority order: this is also the tie-break order used to pick a default. */
+/**
+ * In priority order: this is also the tie-break order used to pick a default.
+ * Decision-maker asks come as tiers — a must-meet is worth any number of
+ * priorities, a priority any number of "interested" — because that is what the
+ * words mean to the people ticking the boxes.
+ */
 export const OBJECTIVES: { key: ObjectiveKey; label: string; hint: string }[] = [
-  { key: 'missedMust', label: 'must-meets missed', hint: 'Decision-maker must-meets that got no meeting' },
-  { key: 'dmLoss', label: 'DM interest lost', hint: 'Decision-maker scores (1–3) of requested meetings that did not happen, added up' },
+  { key: 'missedMust', label: 'must-meets', hint: 'Decision-maker must-meets that got no meeting' },
+  { key: 'missedPriority', label: 'priorities', hint: 'Decision-maker priority asks that got no meeting' },
+  { key: 'missedInterested', label: 'interested', hint: 'Decision-maker "interested" asks that got no meeting' },
   { key: 'teamsShort', label: 'teams short', hint: 'Teams with fewer meetings than the minimum you set' },
   { key: 'dmGaps', label: 'DM windows', hint: 'Empty slots between a decision maker’s first and last meeting, added up over all decision makers' },
-  { key: 'teamLoss', label: 'team interest lost', hint: 'Team scores of requested meetings that did not happen, added up' },
+  { key: 'missedTeam', label: 'team asks', hint: 'Team asks that got no meeting' },
   { key: 'fillers', label: 'fillers', hint: 'Meetings nobody asked for' },
   { key: 'teamGaps', label: 'team windows', hint: 'Empty slots between a team’s first and last meeting, added up over all teams' },
 ]
+
+/** Objectives that count missed asks; shown to users as met/requested. */
+export const ASK_OBJECTIVES: Partial<Record<ObjectiveKey, (p: { dmScore: number; teamScore: number }) => boolean>> = {
+  missedMust: (p) => p.dmScore === 3,
+  missedPriority: (p) => p.dmScore === 2,
+  missedInterested: (p) => p.dmScore === 1,
+  missedTeam: (p) => p.teamScore > 0,
+}
+
+/** How many asks of each kind the input contains, so missed counts can be shown as met/requested. */
+export function requestedCounts(input: Omit<ScheduleInput, 'slots'>): Partial<Record<ObjectiveKey, number>> {
+  const out: Partial<Record<ObjectiveKey, number>> = {}
+  const pairs = allPairs(input)
+  for (const [key, test] of Object.entries(ASK_OBJECTIVES) as [ObjectiveKey, (p: { dmScore: number; teamScore: number }) => boolean][]) {
+    out[key] = pairs.filter(test).length
+  }
+  return out
+}
 
 export interface ObjectiveInput extends ScheduleInput {
   /** Every team should get at least this many meetings. */
@@ -67,14 +93,15 @@ export function measure(input: ObjectiveInput, meetings: PlacedMeeting[]): Objec
   const perTeam = new Map<Id, number>()
   for (const m of meetings) perTeam.set(m.team, (perTeam.get(m.team) ?? 0) + 1)
 
-  const o: Objectives = { missedMust: 0, dmLoss: 0, teamsShort: 0, dmGaps: 0, teamLoss: 0, fillers: 0, teamGaps: 0 }
+  const o: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, teamsShort: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
   for (const p of allPairs(input)) {
     if (met.has(pairKey(p.team, p.dm))) {
       if (p.dmScore === 0 && p.teamScore === 0) o.fillers++
     } else {
       if (p.dmScore === MAX_SCORE) o.missedMust++
-      o.dmLoss += p.dmScore
-      o.teamLoss += p.teamScore
+      if (p.dmScore === 2) o.missedPriority++
+      if (p.dmScore === 1) o.missedInterested++
+      if (p.teamScore > 0) o.missedTeam++
     }
   }
   o.teamsShort = input.teams.filter((t) => (perTeam.get(t.id) ?? 0) < input.teamFloor).length

@@ -1,8 +1,9 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
-import { MAX_SCORE, SCORE_LABELS, scoreOf, type Id, type Participant } from '../lib/scheduler'
-import { randomScores } from '../lib/fixtures'
+import { MAX_SCORE, SCORE_LABELS, scoreOf, type Id, type Participant, type Scores } from '../lib/scheduler'
+import { interestCsv, download } from '../lib/csv'
+import { parseInterestGrid, type GridImport } from '../lib/import'
 import { cycleScore, withScore, withScores, type Project, type ScoreKind } from '../lib/project'
-import { Button, Chooser, Empty, Name, OnlineMark, Panel, PanelHeader, Segmented, scoreTint } from './ui'
+import { Button, Chooser, Empty, Name, OnlineMark, Panel, PanelHeader, Segmented, scoreTint, textareaClass } from './ui'
 import { useNames } from './useNames'
 import { parseName, type DisplayName } from '../lib/names'
 
@@ -26,13 +27,15 @@ const MODES: { value: ScoreKind; label: string; title: string }[] = [
 export function InterestPanel({ project, onChange }: Props) {
   const [mode, setMode] = useState<ScoreKind>('dm')
   const [layout, setLayout] = useState<Layout>('list')
+  const [pasting, setPasting] = useState(false)
   const names = useNames(project)
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const asked = Object.keys(mode === 'dm' ? project.dmScores : project.teamScores).length
+  const kindLabel = mode === 'dm' ? 'decision makers' : 'teams'
 
   return (
     <Panel>
-      <PanelHeader title={`Interest · ${asked} of ${project.teams.length * project.dms.length} cells`}>
+      <PanelHeader title={`Interest · ${asked} ${asked === 1 ? 'ask' : 'asks'} from ${kindLabel}`}>
         <Segmented label="Whose interest" value={mode} options={MODES} onChange={setMode} />
         <div className="hidden md:block">
           <Segmented
@@ -47,14 +50,17 @@ export function InterestPanel({ project, onChange }: Props) {
           />
         </div>
         <ScoreKey kind={mode} />
-        <Button variant="quiet" disabled={!hasPeople} onClick={() => onChange(randomScores(project))} title="Fill both grids with random interest">
-          randomise
+        <Button disabled={!hasPeople} onClick={() => setPasting((v) => !v)} aria-expanded={pasting} title="Paste a grid copied from a spreadsheet">
+          Paste
+        </Button>
+        <Button disabled={!hasPeople} onClick={() => download(`interest-${mode}.csv`, interestCsv(project, mode), 'text/csv')} title="Download this grid as a spreadsheet">
+          CSV
         </Button>
         <Button
           variant="quiet"
           disabled={!hasPeople}
           onClick={() => {
-            if (confirm('Clear both interest grids?')) onChange(withScores(project, {}, {}))
+            if (confirm(`Clear what ${kindLabel} asked?`)) onChange(mode === 'dm' ? withScores(project, {}, project.teamScores) : withScores(project, project.dmScores, {}))
           }}
         >
           clear
@@ -64,6 +70,17 @@ export function InterestPanel({ project, onChange }: Props) {
         <Empty>Add teams and decision makers under People first.</Empty>
       ) : (
         <>
+          {pasting && (
+            <PasteGrid
+              project={project}
+              mode={mode}
+              onApply={(scores) => {
+                onChange((p) => (mode === 'dm' ? withScores(p, scores, p.teamScores) : withScores(p, p.dmScores, scores)))
+                setPasting(false)
+              }}
+              onClose={() => setPasting(false)}
+            />
+          )}
           <div className={layout === 'grid' ? 'hidden md:block' : 'hidden'}>
             <Grid project={project} mode={mode} onCycle={(team, dm) => onChange((p) => cycleScore(p, mode, team, dm))} />
           </div>
@@ -76,15 +93,65 @@ export function InterestPanel({ project, onChange }: Props) {
   )
 }
 
+/**
+ * Import a grid from the clipboard: names down one side and across the top,
+ * 0–3 in the cells. Replaces this side's asks once the organiser has seen
+ * what matched.
+ */
+function PasteGrid({ project, mode, onApply, onClose }: { project: Project; mode: ScoreKind; onApply: (scores: Scores) => void; onClose: () => void }) {
+  const [text, setText] = useState('')
+  const parsed: GridImport | null = text.trim() ? parseInterestGrid(text, project.teams, project.dms) : null
+  const who = mode === 'dm' ? 'decision makers' : 'teams'
+  return (
+    <div className="grid gap-2 border-b border-rule bg-canvas px-3 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)]">
+      <textarea
+        aria-label="Pasted interest grid"
+        className={`${textareaClass} min-h-[8rem] font-mono text-[0.75rem]`}
+        placeholder={'Copy the sheet and paste it here.\nNames across the top and down the side, 0–3 (or x) in the cells.'}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        autoFocus
+      />
+      <div className="flex flex-col gap-2 text-[0.8rem]">
+        <p className="text-muted">Replaces what {who} asked. Names match loosely: full name, surname form, or the board code.</p>
+        {parsed ? (
+          <ul className="text-[0.8rem]">
+            <li>
+              {parsed.matchedDms}/{project.dms.length} decision makers · {parsed.matchedTeams}/{project.teams.length} teams · {Object.keys(parsed.scores).length} asks
+            </li>
+            {parsed.unmatched.length > 0 && (
+              <li className="text-warn" title={parsed.unmatched.join(', ')}>
+                not recognised: {parsed.unmatched.slice(0, 4).join(', ')}
+                {parsed.unmatched.length > 4 && ` +${parsed.unmatched.length - 4}`}
+              </li>
+            )}
+            {parsed.unreadable > 0 && <li className="text-warn">{parsed.unreadable} cells were not 0–3</li>}
+          </ul>
+        ) : (
+          text.trim() && <p className="text-warn">No names recognised in the first row or column.</p>
+        )}
+        <div className="mt-auto flex gap-2">
+          <Button variant="primary" disabled={!parsed} onClick={() => parsed && onApply(parsed.scores)}>
+            Apply
+          </Button>
+          <Button variant="quiet" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ScoreKey({ kind }: { kind: ScoreKind }) {
   return (
     <div className="flex items-center gap-2 text-[0.7rem] text-muted">
       {SCORE_LABELS.map((label, s) => (
-        <span key={s} className="inline-flex items-center gap-1" title={label}>
+        <span key={s} className="inline-flex items-center gap-1" title={s ? label : 'not asked'}>
           <span className={`inline-flex h-4 w-4 items-center justify-center rounded-[2px] border border-rule text-[0.65rem] ${scoreTint[kind][s]}`}>
             {s || ''}
           </span>
-          <span className="hidden lg:inline">{label}</span>
+          <span className="hidden lg:inline">{s ? label : 'not asked'}</span>
         </span>
       ))}
     </div>

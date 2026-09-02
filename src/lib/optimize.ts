@@ -14,7 +14,7 @@
 import { compactSlots } from './compact'
 import { selectByFlow } from './flow'
 import { addToFrontier, compareLex, measure, type ObjectiveInput, type Objectives } from './objectives'
-import { allPairs, assignSlots, selectMeetings, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
+import { allPairs, assignSlots, MAX_SCORE, selectMeetings, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
 
 export interface Alternative {
   meetings: PlacedMeeting[]
@@ -25,10 +25,15 @@ export interface Alternative {
 
 /**
  * Relative worth of one point of decision-maker vs team interest. 'dm-first'
- * is truly lexicographic: its DM weight is computed to exceed the sum of ALL
- * team scores, so no amount of team interest can buy back a single DM point.
+ * is lexicographic in points: its DM weight exceeds the sum of ALL team
+ * scores, so no amount of team interest can buy back a single DM point.
+ * 'tiered' goes further and is lexicographic in tiers: one must-meet outweighs
+ * every priority, one priority every "interested", and those every team ask —
+ * exactly the objective order — so the board it finds provably minimises
+ * missed must-meets, then missed priorities, then missed "interested".
  */
-const WEIGHTINGS: [string, number | 'lexicographic', number][] = [
+const WEIGHTINGS: [string, number | 'lexicographic' | 'tiered', number][] = [
+  ['tiered', 'tiered', 1],
   ['dm-first', 'lexicographic', 1],
   ['dm-leaning', 3, 1],
   ['balanced', 1, 1],
@@ -56,14 +61,19 @@ export function candidateSelections(input: ObjectiveInput): { recipe: string; me
   add('greedy', selectMeetings(input))
   add('greedy+fill', selectMeetings({ ...input, fillGaps: true }))
   const floors = [...new Set([0, input.teamFloor])]
-  const totalTeamScore = allPairs(input).reduce((sum, p) => sum + p.teamScore, 0)
+  const pairs = allPairs(input)
+  const totalTeamScore = pairs.reduce((sum, p) => sum + p.teamScore, 0)
+  // Tier weights: each tier is worth more than every pair of the tier below put together.
+  const tier: number[] = [0, totalTeamScore + 1]
+  for (let s = 2; s <= MAX_SCORE; s++) tier[s] = tier[s - 1] * (pairs.length + 1)
   for (const [name, dmWeight, wTeam] of WEIGHTINGS) {
-    const wDm = dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight
     for (const floor of floors) {
       for (const fill of [false, true]) {
         // Requested pairs are worth at least 1000; a filler is worth 1, so
         // fillers only ever use capacity nothing requested could use.
-        const weight = (dm: number, team: number) => 1000 * (wDm * dm + wTeam * team) + (fill ? 1 : 0)
+        const points = (dm: number, team: number) =>
+          dmWeight === 'tiered' ? tier[dm] + wTeam * team : (dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight) * dm + wTeam * team
+        const weight = (dm: number, team: number) => 1000 * points(dm, team) + (fill ? 1 : 0)
         add(`${name}${floor ? ` floor${floor}` : ''}${fill ? ' fill' : ''}`, selectByFlow(input, { weight, teamFloor: floor }))
       }
     }

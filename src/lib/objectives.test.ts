@@ -7,7 +7,7 @@ import { emptyProject, withParticipants, withSlotCount } from './project'
 import { numberedSlots, seededRandom } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
-const zero: Objectives = { missedMust: 0, dmLoss: 0, teamsShort: 0, dmGaps: 0, teamLoss: 0, fillers: 0, teamGaps: 0 }
+const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, teamsShort: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
 
 describe('objectives', () => {
   test('measure counts each dimension', () => {
@@ -26,10 +26,11 @@ describe('objectives', () => {
     ]
     expect(measure(input, meetings)).toEqual({
       missedMust: 0,
-      dmLoss: 2, // t1|d2
+      missedPriority: 1, // t1|d2
+      missedInterested: 0,
       teamsShort: 0,
       dmGaps: 2,
-      teamLoss: 2, // t2|d2
+      missedTeam: 1, // t2|d2
       fillers: 1,
       teamGaps: 0,
     })
@@ -38,20 +39,20 @@ describe('objectives', () => {
   })
 
   test('dominance and frontier', () => {
-    const a = { ...zero, dmLoss: 1 }
-    const b = { ...zero, dmLoss: 2 }
-    const c = { ...zero, dmLoss: 0, teamLoss: 5 }
+    const a = { ...zero, missedPriority: 1 }
+    const b = { ...zero, missedPriority: 2 }
+    const c = { ...zero, missedPriority: 0, missedTeam: 5 }
     expect(dominates(a, b)).toBe(true)
     expect(dominates(b, a)).toBe(false)
     expect(dominates(a, a)).toBe(false)
-    expect(dominates(a, c)).toBe(false) // a loses on dmLoss, c loses on teamLoss
+    expect(dominates(a, c)).toBe(false) // a loses on missedPriority, c loses on missedTeam
     let f: Objectives[] = []
     f = addToFrontier(f, b, (o) => o)
     f = addToFrontier(f, c, (o) => o)
     f = addToFrontier(f, a, (o) => o) // evicts b
     f = addToFrontier(f, { ...a }, (o) => o) // duplicate ignored
     expect(f).toEqual([c, a])
-    expect([...f].sort(compareLex)).toEqual([c, a]) // c has dmLoss 0 → first in priority order
+    expect([...f].sort(compareLex)).toEqual([c, a]) // c misses no priority → first in priority order
   })
 
   test('gapsOf', () => {
