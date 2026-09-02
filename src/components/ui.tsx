@@ -50,7 +50,7 @@ export function RequestMark({
       className={`block size-4 shrink-0 ${requested && !fulfilled ? 'opacity-45' : ''} ${
         requested
           ? both ? '' : dm ? 'bg-request-dm' : 'bg-request-team'
-          : showEmpty ? 'invisible outline outline-1 outline-rule group-hover/matrix:visible' : 'invisible'
+          : showEmpty ? 'outline outline-1 outline-rule' : 'invisible'
       } ${className}`}
       style={both ? { background: 'linear-gradient(135deg, var(--color-request-dm) 0 50%, var(--color-request-team) 50% 100%)' } : undefined}
       title={askedBy(dm, team)}

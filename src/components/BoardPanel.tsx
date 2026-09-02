@@ -179,7 +179,7 @@ function Grid({
     <tr>
       <th aria-label={rows === 'dm' ? 'Decision makers' : 'Teams'} className="sticky top-0 left-0 z-30 h-6 w-px bg-paper p-0" />
       {project.slots.map((slot) => (
-        <th key={slot.id} className="sticky top-0 z-20 h-6 bg-paper px-1.5 py-0 text-center font-mono font-normal">
+        <th key={slot.id} className="sticky top-0 z-20 h-6 w-28 min-w-28 max-w-28 bg-paper px-1.5 py-0 text-center font-mono font-normal">
           {slotLabel(project, slot.id)}
         </th>
       ))}
@@ -210,7 +210,7 @@ function Grid({
           const active = selected?.slot === slot.id && selected.anchor === person.id
           const state = partner ? partner.name : off ? 'not available' : 'free'
           return (
-            <td key={slot.id} className="h-6 p-0 align-middle">
+            <td key={slot.id} className="h-6 w-28 min-w-28 max-w-28 p-0 align-middle">
               <button
                 type="button"
                 aria-pressed={active}
