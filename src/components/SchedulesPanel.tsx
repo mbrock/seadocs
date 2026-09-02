@@ -37,7 +37,7 @@ export function SchedulesPanel({ project }: Props) {
 
   return (
     <>
-      <div className={`grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] ${printAll ? 'print:hidden' : ''}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] ${printAll ? 'print:hidden' : ''}`}>
         <Panel className="lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:overflow-auto print:hidden">
           <PanelHeader title="Who">
             <Button onClick={printEveryone}>Print all</Button>
@@ -85,7 +85,7 @@ function RunningOrder({ project, index, person, side }: { project: Project; inde
   const meetingAt = (slot: Id) => (side === 'dm' ? index.byCell.get(`${slot}|${person.id}`) : index.byTeamSlot.get(`${slot}|${person.id}`))
   const meetings = project.slots.filter((s) => meetingAt(s.id)).length
   return (
-    <article className="px-4 py-4 print:px-0">
+    <article className="px-3 py-3 print:px-0">
       <div className="mb-4 border-b-2 border-ink pb-2">
         <div className="eyebrow">{side === 'team' ? 'Project team' : 'Decision maker'} · one-to-one meetings</div>
         <h3 className="text-[1.4rem] leading-tight font-extrabold tracking-[-0.03em]">

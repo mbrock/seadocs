@@ -72,7 +72,7 @@ export function Panel({ children, className = '' }: { children: ReactNode; class
 /** Panel title row: eyebrow-styled title on the left, controls on the right. */
 export function PanelHeader({ title, children, className = '' }: { title: ReactNode; children?: ReactNode; className?: string }) {
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule px-4 py-2.5 ${className}`}>
+    <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule px-3 py-2 ${className}`}>
       <h2 className="eyebrow text-ink">{title}</h2>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
@@ -91,7 +91,7 @@ export function Figure({ value, label, tone = 'ink' }: { value: ReactNode; label
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-8 text-center text-[0.9rem] text-muted">{children}</p>
+  return <p className="px-3 py-8 text-center text-[0.9rem] text-muted">{children}</p>
 }
 
 export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 text-[0.85rem] focus:border-ink focus:outline-none'
@@ -117,32 +117,56 @@ export function ScorePair({ dm, team }: { dm: number; team: number }) {
 /**
  * A participant's name that truncates without losing its marks. With `display`
  * (from `displayNames`) it renders the short form plus the country tag:
- * "J. Cornejo ES".
+ * "J. Cornejo ES". The `code` variant is for board cells: the title word for a
+ * team ("EUROPE", set small and tracked), the surname for a person.
  */
 export function Name({
   person,
   display,
   className = '',
   lines = 1,
+  variant = 'short',
 }: {
   person: Participant
   display?: DisplayName
   className?: string
   /** Allow wrapping to this many lines before clipping (default: single line, ellipsis). */
   lines?: 1 | 2
+  variant?: 'short' | 'code'
 }) {
+  const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
+  const isCode = variant === 'code' && display !== undefined && display.code !== display.short && !display.tag
+  const clip = lines === 2 ? 'line-clamp-2 leading-[1.2] [overflow-wrap:anywhere]' : 'truncate'
   return (
     <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
-      <span className={lines === 2 ? 'line-clamp-2 leading-[1.2] [overflow-wrap:anywhere]' : 'truncate'}>{display?.short ?? person.name}</span>
+      <span className={`${clip} ${isCode ? 'text-[0.72rem] font-semibold tracking-[0.05em]' : ''}`}>{text}</span>
       {display?.tag && <Tag>{display.tag}</Tag>}
       <OnlineMark show={person.online} />
     </span>
   )
 }
 
+/** One entry of a colour key: a swatch (or any small mark) and its meaning. */
+export function KeyItem({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
+      {swatch}
+      {children}
+    </span>
+  )
+}
+
+export function Swatch({ className = '' }: { className?: string }) {
+  return <span aria-hidden className={`inline-block h-3 w-3 rounded-[2px] border border-rule ${className}`} />
+}
+
 /** Small-caps style label, e.g. a country code after a name. */
 export function Tag({ children }: { children: ReactNode }) {
-  return <span className="ml-1 shrink-0 self-center rounded-[2px] border border-rule px-[3px] text-[0.58rem] leading-[1.4] font-bold tracking-[0.08em] text-muted">{children}</span>
+  return (
+    <span className="ml-1 shrink-0 self-center rounded-[2px] border border-current/30 px-[3px] text-[0.58rem] leading-[1.4] font-bold tracking-[0.08em] text-current opacity-70">
+      {children}
+    </span>
+  )
 }
 
 /** Marks a participant who joins by video. */
@@ -182,7 +206,7 @@ export function Chooser({
 }) {
   return (
     <>
-      <div className="px-4 py-3 lg:hidden">
+      <div className="px-3 py-3 lg:hidden">
         <select aria-label={label} value={current ?? ''} onChange={(e) => onPick(e.target.value)} className={`${inputClass} w-full`}>
           {groups.map((g) => (
             <optgroup key={g.title} label={g.title}>
@@ -198,7 +222,7 @@ export function Chooser({
       <div className="hidden lg:block">
         {groups.map((g) => (
           <div key={g.title} className="border-b border-rule py-2 last:border-b-0">
-            <div className="eyebrow px-4 py-1">{g.title}</div>
+            <div className="eyebrow px-3 py-1">{g.title}</div>
             <ul>
               {g.people.map((p) => (
                 <li key={p.id}>
@@ -206,7 +230,7 @@ export function Chooser({
                     type="button"
                     aria-current={p.id === current ? 'true' : undefined}
                     onClick={() => onPick(p.id)}
-                    className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-1 text-left text-[0.88rem] hover:bg-canvas ${
+                    className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1 text-left text-[0.88rem] hover:bg-canvas ${
                       p.id === current ? 'bg-accent-soft font-semibold' : ''
                     }`}
                   >

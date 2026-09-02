@@ -95,7 +95,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="wrap flex-1 py-4 print:p-0">
+      <main className="wrap flex-1 py-3 print:p-0">
         {view === 'people' && <PeoplePanel project={project} onChange={setProject} />}
         {view === 'interest' && <InterestPanel project={project} onChange={setProject} />}
         {view === 'board' && <BoardPanel project={project} onChange={setProject} generated={generated} onGenerated={setGenerated} />}

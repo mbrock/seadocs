@@ -22,7 +22,7 @@ import { generate, isFresh, type Generated } from '../lib/generate'
 import { Frontier } from './Frontier'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, Figure, Name, OnlineMark, Panel, PanelHeader, ScorePair, Segmented, scoreTint } from './ui'
+import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, ScorePair, Segmented, scoreTint, Swatch } from './ui'
 
 interface Props {
   project: Project
@@ -71,8 +71,8 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
   const setMeetings = (meetings: PlacedMeeting[]) => onChange((p) => withMeetings(p, meetings))
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,21rem)]">
-      <div className="flex min-w-0 flex-col gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
+      <div className="flex min-w-0 flex-col gap-3">
         <Panel>
           <PanelHeader title="Boards">
             <Button variant="primary" disabled={!hasPeople} onClick={run}>
@@ -85,7 +85,7 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
           {fresh ? (
             <Frontier project={project} alternatives={generated.alternatives} onPick={setMeetings} />
           ) : hasBoard ? (
-            <p className="px-4 py-3 text-[0.85rem] text-muted">
+            <p className="px-3 py-3 text-[0.85rem] text-muted">
               {generated ? 'People, interest or slots changed since these boards were generated.' : 'This board was loaded from the saved project.'} Generate to
               see the alternatives.
             </p>
@@ -96,6 +96,7 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
 
         <Panel>
           <PanelHeader title={`Board · ${project.meetings.length} meetings`}>
+            <Key />
             <Segmented
               label="Rows"
               size="sm"
@@ -158,11 +159,11 @@ function Grid({
   const partnerOf = (m: PlacedMeeting) => partnerById.get(rows === 'dm' ? m.team : m.dm)
   return (
     <div className="max-h-[75vh] overflow-auto">
-      {/* Fixed layout: the name column is 9rem, slots share the rest, and the table can't grow past the panel unless it has to. */}
-      <table className="w-full table-fixed border-separate border-spacing-0 text-[0.8rem]" style={{ minWidth: `${9 + 6 * project.slots.length}rem` }}>
+      {/* Fixed layout: the name column is 10.5rem, slots share the rest, and the table can't grow past the panel unless it has to. */}
+      <table className="w-full table-fixed border-separate border-spacing-0 text-[0.8rem]" style={{ minWidth: `${10.5 + 6 * project.slots.length}rem` }}>
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 w-[9rem] border-r border-b border-rule bg-paper" />
+            <th className="sticky top-0 left-0 z-30 w-[10.5rem] border-r border-b border-rule bg-paper" />
             {project.slots.map((slot) => (
               <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-2 py-1.5 text-left font-mono text-[0.75rem] font-semibold">
                 {slotLabel(project, slot.id)}
@@ -194,11 +195,18 @@ function Grid({
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${partner ? partner.name : 'free'}`}
                       title={partner ? `${partner.name} · decision maker ${dmScore}, team ${teamScore}` : 'free'}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
-                      className={`relative flex min-h-10 w-full cursor-pointer items-center px-2 py-1 text-left text-[0.75rem] hover:outline hover:outline-ink ${
+                      className={`relative flex h-8 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
-                      } ${duplicate ? 'bg-warn-soft' : scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'}`}
+                      } ${duplicate ? 'bg-warn-soft text-warn' : scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'} ${
+                        partner && !duplicate && dmScore === 0 && teamScore === 0 ? 'text-muted' : ''
+                      }`}
                     >
-                      {partner ? <Name person={partner} display={names.get(partner.id)} className="flex" lines={2} /> : <span>·</span>}
+                      {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : <span>·</span>}
+                      {duplicate && (
+                        <span aria-label="meets twice" className="ml-auto pl-1 text-[0.65rem] font-bold">
+                          ×2
+                        </span>
+                      )}
                       {teamScore > 0 && <span aria-hidden className="absolute right-1 bottom-1 h-1 w-1 rounded-full bg-sea-3" />}
                     </button>
                   </td>
@@ -208,6 +216,32 @@ function Grid({
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** What the cell colours mean. Tint = how much the decision maker asked; the dot = the team asked too. */
+function Key() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <KeyItem
+        swatch={
+          <span className="inline-flex gap-px">
+            <Swatch className="bg-rose-1" />
+            <Swatch className="bg-rose-2" />
+            <Swatch className="bg-rose-3" />
+          </span>
+        }
+      >
+        DM asked 1 · 2 · 3
+      </KeyItem>
+      <KeyItem swatch={<span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-sea-3" />}>team asked</KeyItem>
+      <KeyItem swatch={<Swatch className="bg-paper" />}>
+        <span className="text-muted">nobody asked</span>
+      </KeyItem>
+      <KeyItem swatch={<Swatch className="bg-warn-soft" />}>
+        <span className="text-warn">×2 meets twice</span>
+      </KeyItem>
     </div>
   )
 }
@@ -266,7 +300,7 @@ function Inspector({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-3 border-b border-rule px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-rule px-3 py-3">
         <div className="min-w-0">
           <div className="eyebrow">{slotLabel(project, slot)}</div>
           <div className="truncate text-[1rem] font-bold" title={anchorPerson.name}>
@@ -279,7 +313,7 @@ function Inspector({
         </Button>
       </div>
 
-      <div className="border-b border-rule px-4 py-3">
+      <div className="border-b border-rule px-3 py-3">
         {current && cur ? (
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -296,13 +330,13 @@ function Inspector({
         )}
       </div>
 
-      <div className="px-4 py-3">
+      <div className="px-3 py-3">
         <div className="eyebrow mb-1">{current ? 'Replace with' : 'Assign'}</div>
-        <CandidateList rows={requested} project={project} names={names} onPick={assign} load={load} />
+        <CandidateList rows={requested} project={project} names={names} onPick={assign} load={load} current={current} />
         {unrequested.length > 0 && (
           <details className="mt-2">
             <summary className="cursor-pointer text-[0.8rem] text-muted">{unrequested.length} nobody asked for</summary>
-            <CandidateList rows={unrequested} project={project} names={names} onPick={assign} load={load} />
+            <CandidateList rows={unrequested} project={project} names={names} onPick={assign} load={load} current={current} />
           </details>
         )}
       </div>
@@ -325,12 +359,15 @@ function CandidateList({
   names,
   onPick,
   load,
+  current,
 }: {
   rows: CandidateRow[]
   project: Project
   names: Map<Id, DisplayName>
   onPick: (id: Id) => void
   load: Map<Id, number>
+  /** Who sits in the cell now; a swap hands them to the candidate's current partner. */
+  current: Id | null
 }) {
   if (!rows.length) return <p className="py-1 text-[0.8rem] text-muted">Nobody.</p>
   return (
@@ -343,18 +380,29 @@ function CandidateList({
               type="button"
               disabled={already}
               onClick={() => onPick(r.person.id)}
-              title={already ? `Already meeting at ${slotLabel(project, r.alreadyAt!)}` : r.swapWith ? `Swap: ${participantName(project, r.swapWith)} gets the current occupant` : 'Free in this slot'}
+              title={
+                already
+                  ? `They already meet at ${slotLabel(project, r.alreadyAt!)} — a second meeting would be a repeat`
+                  : r.swapWith
+                    ? `Swap: ${participantName(project, r.swapWith)} gets the current occupant`
+                    : 'Free in this slot'
+              }
               className="flex w-full cursor-pointer items-center justify-between gap-2 py-1.5 text-left hover:bg-canvas disabled:cursor-default disabled:opacity-45"
             >
               <span className="min-w-0">
                 <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
                 <span className="block text-[0.75rem] text-muted">
                   {already
-                    ? `already meet · ${slotLabel(project, r.alreadyAt!)}`
+                    ? `already meet at ${slotLabel(project, r.alreadyAt!)}`
                     : r.swapWith
-                      ? `swap with ${names.get(r.swapWith)?.short ?? participantName(project, r.swapWith)}`
+                      ? `swap with ${names.get(r.swapWith)?.code ?? participantName(project, r.swapWith)}`
                       : 'free'}
-                  {!already && r.swapRepeats && <span className="text-warn"> · repeats a meeting</span>}{' '}
+                  {!already && r.swapRepeats && current && (
+                    <span className="text-warn">
+                      {' '}
+                      · {names.get(r.swapWith!)?.code} would meet {names.get(current)?.code} twice
+                    </span>
+                  )}{' '}
                   · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
                 </span>
               </span>
@@ -382,32 +430,32 @@ function Summary({
   hasBoard: boolean
 }) {
   if (!hasBoard) return null
-  const name = (id: Id) => names.get(id)?.short ?? participantName(project, id)
+  const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
   return (
     <Panel>
       <PanelHeader title="This board" />
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-3 py-3">
         <Figure value={`${stats.meetings}/${stats.capacity}`} label="seats filled" />
         <Figure value={`${stats.mustMeetSatisfied}/${stats.mustMeetRequested}`} label="must-meets" tone={stats.mustMeetSatisfied < stats.mustMeetRequested ? 'warn' : 'ink'} />
         <Figure value={`${stats.dmSatisfied}/${stats.dmRequested}`} label="DM asks met" />
         <Figure value={`${stats.teamSatisfied}/${stats.teamRequested}`} label="team asks met" />
       </div>
       {issues.length > 0 && (
-        <div className="border-t border-rule px-4 py-3">
-          <div className="eyebrow mb-1 text-warn">Clashes</div>
+        <div className="border-t border-rule px-3 py-3">
+          <div className="eyebrow mb-1 text-warn">Problems · {issues.length}</div>
           <ul className="text-[0.8rem]">
             {issues.map((i, idx) => (
               <li key={idx} className="py-0.5">
-                {i.type === 'duplicate' && `${name(i.team)} and ${name(i.dm)} meet twice (${label(i.slots[0])}, ${label(i.slots[1])})`}
-                {i.type === 'team-clash' && `${name(i.team)} booked twice at ${label(i.slot)}`}
-                {i.type === 'dm-clash' && `${name(i.dm)} booked twice at ${label(i.slot)}`}
+                {i.type === 'duplicate' && `${name(i.dm)} meets ${name(i.team)} twice · ${i.slots.map(label).join(', ')}`}
+                {i.type === 'team-clash' && `${name(i.team)} is in two places at ${label(i.slot)}`}
+                {i.type === 'dm-clash' && `${name(i.dm)} is in two places at ${label(i.slot)}`}
               </li>
             ))}
           </ul>
         </div>
       )}
-      <div className="border-t border-rule px-4 py-3">
+      <div className="border-t border-rule px-3 py-3">
         <div className="eyebrow mb-1">Not scheduled · {stats.unmet.length}</div>
         {stats.unmet.length === 0 ? (
           <p className="text-[0.8rem] text-muted">Every request got a meeting.</p>

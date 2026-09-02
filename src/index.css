@@ -47,8 +47,7 @@
 @utility wrap {
   margin-inline: auto;
   width: 100%;
-  max-width: 100rem;
-  padding-inline: clamp(1rem, 4vw, 3rem);
+  padding-inline: 0.75rem;
 }
 
 @utility eyebrow {

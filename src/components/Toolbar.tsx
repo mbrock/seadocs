@@ -16,7 +16,7 @@ interface Props {
 /**
  * File and history controls for the header: undo / redo, save / open / new.
  * Everything is saved in the browser as you go; the file buttons are for
- * moving the project elsewhere. Clashes on the board show up here too.
+ * moving the project elsewhere. Problems on the board (repeats, double bookings) show up here too.
  */
 export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
@@ -49,7 +49,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
     <div className="flex items-center gap-1 text-[0.8rem]">
       {issues > 0 && (
         <a href="#board" className="mr-2 rounded-[2px] bg-warn px-1.5 font-semibold text-paper">
-          {issues} clash{issues === 1 ? '' : 'es'}
+          {issues} problem{issues === 1 ? '' : 's'}
         </a>
       )}
       {note && <span className="mr-2 hidden text-muted sm:inline">{note}</span>}

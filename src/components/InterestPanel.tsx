@@ -183,7 +183,7 @@ function RowEditor({
           meta={(a) => `${asksOf(a)}/${targets.length}`}
         />
       </div>
-      <div className="px-4 py-3">
+      <div className="px-3 py-3">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="eyebrow">

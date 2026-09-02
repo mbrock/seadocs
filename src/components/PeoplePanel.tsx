@@ -51,7 +51,7 @@ export function PeoplePanel({ project, onChange }: Props) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr_minmax(16rem,20rem)]">
+    <div className="grid gap-3 lg:grid-cols-[1fr_1fr_minmax(16rem,20rem)]">
       <Panel>
         <PanelHeader title={`Teams · ${teamCount}`} />
         <div className="p-4">
@@ -83,7 +83,7 @@ export function PeoplePanel({ project, onChange }: Props) {
         </div>
       </Panel>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <Panel>
           <PanelHeader title="Slots" />
           <div className="grid gap-3 p-4">

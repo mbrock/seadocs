@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countryCode, displayNames, initialSurname, parseName } from './names'
+import { countryCode, displayNames, initialSurname, parseName, titleWord, titleWords } from './names'
 
 describe('parseName', () => {
   it('splits person, organisation and country', () => {
@@ -49,8 +49,8 @@ describe('displayNames', () => {
       { id: 'd1', name: 'Rebecca Heiler | goEast, Germany' },
       { id: 't1', name: '14,5 km Away From Our Dreams' },
     ])
-    expect(names.get('d1')).toEqual({ short: 'R. Heiler', tag: 'DE', affiliation: 'goEast, Germany' })
-    expect(names.get('t1')).toEqual({ short: '14,5 km Away From Our Dreams', tag: '', affiliation: '' })
+    expect(names.get('d1')).toEqual({ short: 'R. Heiler', code: 'Heiler', tag: 'DE', affiliation: 'goEast, Germany' })
+    expect(names.get('t1')).toEqual({ short: '14,5 km Away From Our Dreams', code: 'DREAMS', tag: '', affiliation: '' })
   })
   it('falls back to full names when abbreviations collide', () => {
     const names = displayNames([
@@ -61,5 +61,40 @@ describe('displayNames', () => {
     expect(names.get('a')?.short).toBe('Anna Nielsen')
     expect(names.get('b')?.short).toBe('Astrid Nielsen')
     expect(names.get('c')?.short).toBe('B. Berg')
+  })
+})
+
+describe('titleWord', () => {
+  it('picks the word a crew would use for each BSD 2026 title', () => {
+    const expected: [string, string][] = [
+      ['14,5 km Away From Our Dreams', 'DREAMS'],
+      ['35 Letters', 'LETTERS'],
+      ['Borderline', 'BORDERLINE'],
+      ['Concrete Grassland', 'GRASSLAND'],
+      ['Cords of Bliss', 'BLISS'],
+      ['The Crust of Europe', 'EUROPE'],
+      ['Encounters/Departures', 'ENCOUNTERS'],
+      ['Evening School', 'EVENING'],
+      ['Going Underground', 'UNDERGROUND'],
+      ['Keepers of the City', 'KEEPERS'],
+      ['Lunatics', 'LUNATICS'],
+      ['Mariana’s Lament', 'LAMENT'],
+      ['Master of Ceremonies', 'CEREMONIES'],
+    ]
+    for (const [title, word] of expected) expect(titleWord(title), title).toBe(word)
+  })
+  it('falls back to generic words when nothing else is left, and to nothing when no words qualify', () => {
+    expect(titleWord('The City')).toBe('CITY')
+    expect(titleWord('1984')).toBe('')
+    expect(titleWord('Us')).toBe('')
+  })
+})
+
+describe('titleWords', () => {
+  it('disambiguates titles that share a word', () => {
+    expect(titleWords(['The Crust of Europe', 'Little Europe', 'Cords of Bliss'])).toEqual(['CRUST EUROPE', 'LITTLE EUROPE', 'BLISS'])
+  })
+  it('uses the whole title when no word qualifies', () => {
+    expect(titleWords(['1984', 'Us'])).toEqual(['1984', 'US'])
   })
 })

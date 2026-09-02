@@ -14,12 +14,14 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 The app has four views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
-save / open / new, and shows a clash count when the board has one.
+save / open / new, and shows a problem count when the board has one.
 
 - **People** — paste the list of teams and the list of decision makers (one
   per line as `Name | Organisation, Country`; the country becomes a small tag
-  and names are shortened to "J. Cornejo" in dense tables; a trailing `*`
-  marks someone who joins online), set the number of
+  and names are shortened to "J. Cornejo" in dense tables, while project titles
+  get a one-word code in capitals — "The Crust of Europe" → EUROPE, "Evening
+  School" → EVENING — the way a crew refers to films it knows by heart; a
+  trailing `*` marks someone who joins online), set the number of
   slots and optionally label them with times, and a *minimum meetings per
   team* floor so no team goes home with an empty day when there is room to
   avoid it. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
@@ -35,12 +37,15 @@ save / open / new, and shows a clash count when the board has one.
   named by what it trades (“Best for decision makers”, “Fewer DM windows”,
   “More team interest met”…) and scored on the objectives below; the first is
   loaded onto the board. Rows are decision makers (or teams), columns are
-  slots; a cell's tint is the decision maker's interest, a blue dot means the
-  team asked too. Click any
-  cell to open it in the side panel: who is there, and every counterpart that
-  could be, strongest request first, marked *free*, *swap with …* (the two
-  meetings trade partners) or *already meet*. Duplicates and double bookings
-  created by hand are flagged as clashes. When no cell is selected the side
+  slots; the key in the panel header explains the cells: the rose tint is how
+  much the decision maker asked (1 · 2 · 3), a blue dot means the team asked
+  too, a white cell with a name is a meeting nobody asked for, and a pair that
+  meets twice is marked ×2. Click any cell to open it in the side panel: who is
+  there, and every counterpart that could be, strongest request first, marked
+  *free*, *swap with …* (the two meetings trade partners, with a warning when
+  the swap would make a pair meet twice) or *already meet*. Repeats and double
+  bookings are the board's two kinds of *problem*; both are counted in the
+  header bar and listed in the side panel. When no cell is selected the side
   panel shows the board's figures and the requested meetings that did not fit.
 - **Schedules** — one running order per team or decision maker, to print one
   at a time or all at once (one page each), or export everyone's as CSV.
