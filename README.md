@@ -88,8 +88,10 @@ Which meetings happen is decided several ways: the original greedy ranking
 and without filling leftover capacity, and an **exact** maximum-weight selector
 ([`src/lib/flow.ts`](src/lib/flow.ts), min-cost flow) run under several
 weightings of decision-maker vs team interest, with and without enforcing the
-per-team minimum. Each selection respects one-meeting-per-slot capacity on both
-sides.
+per-team minimum. The "dm-first" weighting is strictly lexicographic (one point
+of decision-maker interest outweighs all team interest put together), so its
+board loses the least decision-maker interest any board can. Each selection
+respects one-meeting-per-slot capacity on both sides.
 
 **2. Slot assignment** ([`src/lib/scheduler.ts`](src/lib/scheduler.ts)).
 Because the teams/decision-makers graph is bipartite, König's edge-colouring
@@ -144,8 +146,10 @@ src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's
 src/lib/objectives.ts      the objective vector, dominance, frontier merge
 src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
 src/lib/generate.ts        ties the frontier to a project snapshot (stale detection)
+src/lib/project.ts         project model: participants, slots, scores, meetings, with* update functions
+src/lib/persist.ts         project file format (v3) with v1/v2 migration, localStorage
 src/lib/sample.ts          the BSD 2026 sample day (real names, invented interest)
-src/lib/state.ts           project model, stable participant ids, save/load, v1 import, demo data
+src/lib/fixtures.ts        seeded random 26 × 26 stress-test day
 src/lib/csv.ts             CSV exports and file download
 src/lib/*.test.ts          Vitest suites
 ```
@@ -153,25 +157,26 @@ src/lib/*.test.ts          Vitest suites
 The scheduling and model code has no React or DOM dependency; the components
 only call its functions and render the result.
 
-### Project file format (v2)
+### Project file format (v3)
 
 ```jsonc
 {
-  "version": 2,
+  "version": 3,
   "teams": [{ "id": "t1", "name": "Team A" }],
   "dms":   [{ "id": "d2", "name": "Fund X" }],
-  "slotCount": 12,
-  "slotLabels": ["09:00", "09:20"],       // missing ones show as "Slot n"
+  "slots": [{ "id": "s3", "label": "09:00" }, { "id": "s4", "label": "" }],  // in order; "" shows as "Slot n"
   "dmScores":   { "t1|d2": 3 },           // 1..3; zero is simply absent
   "teamScores": { "t1|d2": 1 },
-  "meetings":   [{ "team": "t1", "dm": "d2", "slot": 0 }],
+  "meetings":   [{ "team": "t1", "dm": "d2", "slot": "s3" }],
   "teamFloor": 1,                         // minimum meetings per team
-  "nextId": 3
+  "nextId": 5
 }
 ```
 
-Participants have stable ids so you can add, remove, or reorder names in Setup
-without the interest grid shifting under you. Files saved by the original
-single-file prototype (v1, index-based) are converted on open. Earlier v2 files
-had a `fillGaps` flag instead of `teamFloor`; it is ignored (filling gaps is
-now one of the alternatives rather than a switch).
+Participants and slots have stable ids from one shared counter, so you can add,
+remove, or reorder names in Setup without the interest grid shifting under you,
+and change the slot count without meetings jumping to different times. Older
+files are converted on open: v1 (the original single-file prototype, everything
+by list position) and v2 (`slotCount` + `slotLabels`, meetings by slot
+position). A v2 `fillGaps` flag is ignored (filling gaps is now one of the
+alternatives rather than a switch).

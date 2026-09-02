@@ -7,12 +7,13 @@ import {
   reassign,
   scoreOf,
   SCORE_LABELS,
+  type Id,
   type Issue,
   type MeetingIndex,
   type Participant,
   type Stats,
 } from '../lib/scheduler'
-import { participantName, slotLabel, withMeetings, type Project } from '../lib/state'
+import { participantName, slotLabel, withMeetings, type Project } from '../lib/project'
 import { boardCsv, download, personalCsv } from '../lib/csv'
 import { generate, isFresh, type Generated } from '../lib/generate'
 import { Alternatives } from './Alternatives'
@@ -155,7 +156,7 @@ function Unmet({ project, stats }: { project: Project; stats: Stats }) {
 function Issues({ project, issues }: { project: Project; issues: Issue[] }) {
   if (!issues.length) return null
   const name = (id: string) => participantName(project, id)
-  const label = (slot: number) => slotLabel(project, slot)
+  const label = (slot: string) => slotLabel(project, slot)
   return (
     <div className="mb-3 border-l-[3px] border-brick px-3 py-1.5 text-[13px]">
       <strong>Check these:</strong>
@@ -172,9 +173,8 @@ function Issues({ project, issues }: { project: Project; issues: Issue[] }) {
   )
 }
 
-function Board({ project, onReassign }: { project: Project; onReassign: (slot: number, dm: string, team: string | null) => void }) {
+function Board({ project, onReassign }: { project: Project; onReassign: (slot: Id, dm: Id, team: Id | null) => void }) {
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
-  const slots = Array.from({ length: project.slotCount }, (_, i) => i)
   const th = 'sticky top-0 z-20 min-w-[150px] bg-ink px-1.5 py-2 font-mono text-[10px] tracking-[0.5px] text-paper'
   return (
     <table className="border-collapse text-[12px]">
@@ -189,14 +189,14 @@ function Board({ project, onReassign }: { project: Project; onReassign: (slot: n
         </tr>
       </thead>
       <tbody>
-        {slots.map((slot) => (
-          <tr key={slot}>
+        {project.slots.map((slot) => (
+          <tr key={slot.id}>
             <td className="sticky left-0 z-10 border border-line bg-paper-dim px-1.5 py-1 font-mono font-bold whitespace-nowrap">
-              {slotLabel(project, slot)}
+              {slotLabel(project, slot.id)}
             </td>
             {project.dms.map((d) => (
               <td key={d.id} className="min-w-[150px] border border-line bg-cream px-1.5 py-1">
-                <CellSelect project={project} slot={slot} dm={d} index={index} onReassign={onReassign} />
+                <CellSelect project={project} slot={slot.id} dm={d} index={index} onReassign={onReassign} />
               </td>
             ))}
           </tr>
@@ -216,10 +216,10 @@ function CellSelect({
   onReassign,
 }: {
   project: Project
-  slot: number
+  slot: Id
   dm: Participant
   index: MeetingIndex
-  onReassign: (slot: number, dm: string, team: string | null) => void
+  onReassign: (slot: Id, dm: Id, team: Id | null) => void
 }) {
   const current = index.byCell.get(`${slot}|${dm.id}`)?.team ?? null
   const duplicate = current !== null && (index.byPair.get(pairKey(current, dm.id))?.length ?? 0) > 1

@@ -12,7 +12,7 @@
 // and, on the team side, from where each project's money is likely to come from.
 
 import { pairKey, type Scores } from './scheduler'
-import { emptyProject, withParticipants, withScores, withSlots, type Project } from './state'
+import { emptyProject, withParticipants, withScores, withSlots, type Project } from './project'
 
 /** Column order for the decision-maker rows below (the pitching order that day). */
 const TEAMS = [

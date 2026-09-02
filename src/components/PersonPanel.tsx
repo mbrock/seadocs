@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { indexMeetings } from '../lib/scheduler'
-import { participantName, slotLabel, type Project } from '../lib/state'
+import { participantName, slotLabel, type Project } from '../lib/project'
 import { Button, Card, CardTitle, Hint } from './ui'
 
 interface Props {
@@ -58,16 +58,15 @@ function PersonSchedule({ project, selection }: { project: Project; selection: s
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
   const isTeam = selection.startsWith('t:')
   const id = selection.slice(2)
-  const slots = Array.from({ length: project.slotCount }, (_, i) => i)
   return (
     <div>
       <h3 className="mt-4.5 mb-1.5 font-mono text-[14px] tracking-[1px]">{participantName(project, id)}</h3>
       <ul>
-        {slots.map((slot) => {
-          const m = isTeam ? index.byTeamSlot.get(`${slot}|${id}`) : index.byCell.get(`${slot}|${id}`)
+        {project.slots.map((slot) => {
+          const m = isTeam ? index.byTeamSlot.get(`${slot.id}|${id}`) : index.byCell.get(`${slot.id}|${id}`)
           return (
-            <li key={slot} className="flex justify-between border-b border-line px-1 py-2.5 font-mono text-[13px]">
-              <span className="text-teal">{slotLabel(project, slot)}</span>
+            <li key={slot.id} className="flex justify-between border-b border-line px-1 py-2.5 font-mono text-[13px]">
+              <span className="text-teal">{slotLabel(project, slot.id)}</span>
               {m ? <span>{participantName(project, isTeam ? m.dm : m.team)}</span> : <span className="italic text-faint">free</span>}
             </li>
           )

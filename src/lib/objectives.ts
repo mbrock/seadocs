@@ -8,7 +8,7 @@
 // (e.g. "one more decision-maker wish granted" vs "two fewer idle windows"),
 // which is why we show them all rather than picking by a hidden formula.
 
-import { allPairs, MAX_SCORE, pairKey, type Id, type PlacedMeeting, type ScheduleInput } from './scheduler'
+import { allPairs, MAX_SCORE, pairKey, slotIndex, type Id, type PlacedMeeting, type ScheduleInput, type Slot } from './scheduler'
 
 export interface Objectives {
   /** Decision-maker must-meets (score 3) that did not get a meeting. */
@@ -46,15 +46,16 @@ export interface ObjectiveInput extends ScheduleInput {
 }
 
 /** Idle slots strictly inside each participant's day, summed. */
-export function gapsOf(meetings: PlacedMeeting[], side: 'team' | 'dm'): number {
-  const slots = new Map<Id, number[]>()
+export function gapsOf(meetings: PlacedMeeting[], slots: Slot[], side: 'team' | 'dm'): number {
+  const index = slotIndex(slots)
+  const used = new Map<Id, number[]>()
   for (const m of meetings) {
     const id = m[side]
-    if (!slots.has(id)) slots.set(id, [])
-    slots.get(id)!.push(m.slot)
+    if (!used.has(id)) used.set(id, [])
+    used.get(id)!.push(index.get(m.slot)!)
   }
   let gaps = 0
-  for (const s of slots.values()) {
+  for (const s of used.values()) {
     const distinct = new Set(s)
     gaps += Math.max(...s) - Math.min(...s) + 1 - distinct.size
   }
@@ -77,8 +78,8 @@ export function measure(input: ObjectiveInput, meetings: PlacedMeeting[]): Objec
     }
   }
   o.teamsShort = input.teams.filter((t) => (perTeam.get(t.id) ?? 0) < input.teamFloor).length
-  o.dmGaps = gapsOf(meetings, 'dm')
-  o.teamGaps = gapsOf(meetings, 'team')
+  o.dmGaps = gapsOf(meetings, input.slots, 'dm')
+  o.teamGaps = gapsOf(meetings, input.slots, 'team')
   return o
 }
 

@@ -14,7 +14,7 @@
 import { compactSlots } from './compact'
 import { selectByFlow } from './flow'
 import { addToFrontier, compareLex, measure, type ObjectiveInput, type Objectives } from './objectives'
-import { assignSlots, selectMeetings, type Meeting, type PlacedMeeting } from './scheduler'
+import { allPairs, assignSlots, selectMeetings, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
 
 export interface Alternative {
   meetings: PlacedMeeting[]
@@ -23,8 +23,13 @@ export interface Alternative {
   recipe: string
 }
 
-const WEIGHTINGS: [string, number, number][] = [
-  ['dm-first', 100, 1],
+/**
+ * Relative worth of one point of decision-maker vs team interest. 'dm-first'
+ * is truly lexicographic: its DM weight is computed to exceed the sum of ALL
+ * team scores, so no amount of team interest can buy back a single DM point.
+ */
+const WEIGHTINGS: [string, number | 'lexicographic', number][] = [
+  ['dm-first', 'lexicographic', 1],
   ['dm-leaning', 3, 1],
   ['balanced', 1, 1],
   ['team-leaning', 1, 3],
@@ -51,7 +56,9 @@ export function candidateSelections(input: ObjectiveInput): { recipe: string; me
   add('greedy', selectMeetings(input))
   add('greedy+fill', selectMeetings({ ...input, fillGaps: true }))
   const floors = [...new Set([0, input.teamFloor])]
-  for (const [name, wDm, wTeam] of WEIGHTINGS) {
+  const totalTeamScore = allPairs(input).reduce((sum, p) => sum + p.teamScore, 0)
+  for (const [name, dmWeight, wTeam] of WEIGHTINGS) {
+    const wDm = dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight
     for (const floor of floors) {
       for (const fill of [false, true]) {
         // Requested pairs are worth at least 1000; a filler is worth 1, so
@@ -65,15 +72,15 @@ export function candidateSelections(input: ObjectiveInput): { recipe: string; me
 }
 
 /** Fit a selection into slots with as few windows as possible. */
-export function placeCompactly(meetings: Meeting[], slotCount: number): PlacedMeeting[] {
-  return compactSlots(assignSlots(meetings, slotCount))
+export function placeCompactly(meetings: Meeting[], slots: Slot[]): PlacedMeeting[] {
+  return compactSlots(assignSlots(meetings, slots), slots)
 }
 
 /** The frontier, best-first in objective priority order. */
 export function optimize(input: ObjectiveInput): Alternative[] {
   let frontier: Alternative[] = []
   for (const { recipe, meetings } of candidateSelections(input)) {
-    const placed = placeCompactly(meetings, input.slotCount)
+    const placed = placeCompactly(meetings, input.slots)
     frontier = addToFrontier(frontier, { meetings: placed, objectives: measure(input, placed), recipe }, (a) => a.objectives)
   }
   return frontier.sort((a, b) => compareLex(a.objectives, b.objectives))

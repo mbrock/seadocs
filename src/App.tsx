@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { emptyProject, loadLocal, saveLocal, type Project } from './lib/state'
+import { emptyProject, type Project } from './lib/project'
+import { loadLocal, saveLocal } from './lib/persist'
 import { SaveBar } from './components/SaveBar'
 import { SetupPanel } from './components/SetupPanel'
 import { InterestPanel } from './components/InterestPanel'
@@ -18,7 +19,7 @@ type Tab = (typeof TABS)[number][0]
 
 function headerStamp(project: Project): string {
   if (!project.teams.length && !project.dms.length) return 'empty project'
-  const parts = [`${project.teams.length} teams`, `${project.dms.length} decision makers`, `${project.slotCount} slots`]
+  const parts = [`${project.teams.length} teams`, `${project.dms.length} decision makers`, `${project.slots.length} slots`]
   if (project.meetings.length) parts.push(`${project.meetings.length} meetings`)
   return parts.join(' · ')
 }

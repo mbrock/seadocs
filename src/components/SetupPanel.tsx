@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { sampleProject } from '../lib/sample'
-import { demoProject, parseLines, parseNames, withParticipants, withSlots, withTeamFloor, type Project } from '../lib/state'
+import { demoProject } from '../lib/fixtures'
+import { parseLines, parseNames, withParticipants, withSlots, withTeamFloor, type Project } from '../lib/project'
 import { Button, Card, CardTitle, FieldLabel, Hint, Stamp } from './ui'
 import { inputClass, textareaClass } from './styles'
 
@@ -21,8 +22,8 @@ function draftsFrom(project: Project): Drafts {
   return {
     teamsText: project.teams.map((t) => t.name).join('\n'),
     dmsText: project.dms.map((d) => d.name).join('\n'),
-    slotCount: String(project.slotCount),
-    labelsText: project.slotLabels.join('\n'),
+    slotCount: String(project.slots.length),
+    labelsText: project.slots.map((s) => s.label).join('\n'),
     teamFloor: String(project.teamFloor),
   }
 }
@@ -45,7 +46,7 @@ export function SetupPanel({ project, onChange }: Props) {
     next = withSlots(next, slotCount, parseLines(labelsText))
     next = withTeamFloor(next, teamFloor)
     onChange(next)
-    setStamp(`Saved: ${next.teams.length} teams, ${next.dms.length} decision makers, ${next.slotCount} slots.`)
+    setStamp(`Saved: ${next.teams.length} teams, ${next.dms.length} decision makers, ${next.slots.length} slots.`)
   }
 
   function loadSample() {

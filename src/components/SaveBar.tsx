@@ -1,5 +1,6 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { clearLocal, deserialize, emptyProject, serialize, type Project } from '../lib/state'
+import { emptyProject, type Project } from '../lib/project'
+import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { download } from '../lib/csv'
 import { Button, Card, CardTitle, Hint, Stamp } from './ui'
 

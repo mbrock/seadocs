@@ -3,7 +3,8 @@ import { addToFrontier, compareLex, dominates, gapsOf, measure, type Objectives 
 import { compactSlots, participantsWithWindows } from './compact'
 import { optimize } from './optimize'
 import { assignSlots, findIssues, type Participant, type PlacedMeeting } from './scheduler'
-import { emptyProject, seededRandom, withParticipants } from './state'
+import { emptyProject, withParticipants, withSlotCount } from './project'
+import { numberedSlots, seededRandom } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
 const zero: Objectives = { missedMust: 0, dmLoss: 0, teamsShort: 0, dmGaps: 0, teamLoss: 0, fillers: 0, teamGaps: 0 }
@@ -13,15 +14,15 @@ describe('objectives', () => {
     const input = {
       teams: people('t', 3),
       dms: people('d', 2),
-      slotCount: 4,
+      slots: numberedSlots(4),
       teamFloor: 1,
       dmScores: { 't1|d1': 3, 't2|d1': 1, 't1|d2': 2 },
       teamScores: { 't2|d2': 2, 't1|d1': 1 },
     }
     const meetings: PlacedMeeting[] = [
-      { team: 't1', dm: 'd1', slot: 0 },
-      { team: 't2', dm: 'd1', slot: 3 }, // d1 idle in slots 1,2 → 2 windows
-      { team: 't3', dm: 'd2', slot: 1 }, // nobody asked → filler
+      { team: 't1', dm: 'd1', slot: 's1' },
+      { team: 't2', dm: 'd1', slot: 's4' }, // d1 idle in s2, s3 → 2 windows
+      { team: 't3', dm: 'd2', slot: 's2' }, // nobody asked → filler
     ]
     expect(measure(input, meetings)).toEqual({
       missedMust: 0,
@@ -55,12 +56,13 @@ describe('objectives', () => {
 
   test('gapsOf', () => {
     const ms: PlacedMeeting[] = [
-      { team: 't1', dm: 'd1', slot: 0 },
-      { team: 't1', dm: 'd2', slot: 4 },
-      { team: 't2', dm: 'd2', slot: 5 },
+      { team: 't1', dm: 'd1', slot: 's1' },
+      { team: 't1', dm: 'd2', slot: 's5' },
+      { team: 't2', dm: 'd2', slot: 's6' },
     ]
-    expect(gapsOf(ms, 'team')).toBe(3)
-    expect(gapsOf(ms, 'dm')).toBe(0)
+    const slots = numberedSlots(6)
+    expect(gapsOf(ms, slots, 'team')).toBe(3)
+    expect(gapsOf(ms, slots, 'dm')).toBe(0)
   })
 })
 
@@ -72,7 +74,7 @@ describe('objectives', () => {
  */
 function busyProject(seed: number, density = 0.3) {
   let p = withParticipants(emptyProject(), Array.from({ length: 26 }, (_, i) => `Team ${i + 1}`), Array.from({ length: 26 }, (_, i) => `DM ${i + 1}`))
-  p = { ...p, slotCount: 12 }
+  p = withSlotCount(p, 12)
   const rnd = seededRandom(seed)
   const dmScores: Record<string, number> = {}
   const teamScores: Record<string, number> = {}
@@ -92,13 +94,13 @@ describe('compactSlots', () => {
       const input = busyProject(seed)
       const front = optimize(input)
       const selection = front[0].meetings.map(({ team, dm }) => ({ team, dm }))
-      const plain = assignSlots(selection, input.slotCount)
-      const compact = compactSlots(plain)
+      const plain = assignSlots(selection, input.slots)
+      const compact = compactSlots(plain, input.slots)
       expect(compact.map(({ team, dm }) => `${team}|${dm}`).sort()).toEqual(plain.map(({ team, dm }) => `${team}|${dm}`).sort())
       expect(findIssues(compact)).toEqual([])
-      expect(gapsOf(compact, 'dm')).toBeLessThanOrEqual(gapsOf(plain, 'dm'))
-      if (gapsOf(compact, 'dm') < gapsOf(plain, 'dm')) improvedSomewhere = true
-      expect(participantsWithWindows(compact, 'dm').length).toBeLessThanOrEqual(participantsWithWindows(plain, 'dm').length)
+      expect(gapsOf(compact, input.slots, 'dm')).toBeLessThanOrEqual(gapsOf(plain, input.slots, 'dm'))
+      if (gapsOf(compact, input.slots, 'dm') < gapsOf(plain, input.slots, 'dm')) improvedSomewhere = true
+      expect(participantsWithWindows(compact, input.slots, 'dm').length).toBeLessThanOrEqual(participantsWithWindows(plain, input.slots, 'dm').length)
     }
     expect(improvedSomewhere).toBe(true)
   })

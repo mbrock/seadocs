@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { SCORE_LABELS, scoreOf } from '../lib/scheduler'
-import { cycleScore, randomScores, withScores, type Project, type ScoreKind } from '../lib/state'
+import { randomScores } from '../lib/fixtures'
+import { cycleScore, withScores, type Project, type ScoreKind } from '../lib/project'
 import { Button, Card, CardTitle, Hint, TabButton } from './ui'
 import { scoreClass } from './styles'
 

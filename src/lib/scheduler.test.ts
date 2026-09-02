@@ -11,21 +11,23 @@ import {
   type PlacedMeeting,
   type Participant,
   type Scores,
+  type Slot,
 } from './scheduler'
-import { demoProject, emptyProject, withParticipants, withSlots, withScores, seededRandom, randomScores } from './state'
+import { emptyProject, withParticipants, withSlots, withScores } from './project'
+import { demoProject, numberedSlots, seededRandom, randomScores } from './fixtures'
 
 const ids = (n: number, prefix: string): Participant[] =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
 
 function input(teamCount: number, dmCount: number, slotCount: number, dmScores: Scores = {}, teamScores: Scores = {}) {
-  return { teams: ids(teamCount, 't'), dms: ids(dmCount, 'd'), slotCount, dmScores, teamScores }
+  return { teams: ids(teamCount, 't'), dms: ids(dmCount, 'd'), slots: numberedSlots(slotCount), dmScores, teamScores }
 }
 
-function expectValidPlacement(placed: PlacedMeeting[], slotCount: number) {
+function expectValidPlacement(placed: PlacedMeeting[], slots: Slot[]) {
+  const known = new Set(slots.map((s) => s.id))
   const seen = new Set<string>()
   for (const m of placed) {
-    expect(m.slot).toBeGreaterThanOrEqual(0)
-    expect(m.slot).toBeLessThan(slotCount)
+    expect(known.has(m.slot), `unknown slot ${m.slot}`).toBe(true)
     for (const k of [`t|${m.team}|${m.slot}`, `d|${m.dm}|${m.slot}`]) {
       expect(seen.has(k), `double booking: ${k}`).toBe(false)
       seen.add(k)
@@ -75,9 +77,9 @@ test('assignSlots: places every meeting without double booking (random graphs)',
     const names = (n: number, prefix: string) => ids(n, prefix).map((x) => x.name)
     const p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), S, []), rand)
     const chosen = selectMeetings({ ...p, fillGaps: rand() > 0.5 })
-    const placed = assignSlots(chosen, S)
+    const placed = assignSlots(chosen, p.slots)
     expect(placed).toHaveLength(chosen.length)
-    expectValidPlacement(placed, S)
+    expectValidPlacement(placed, p.slots)
   }
 })
 
@@ -94,13 +96,14 @@ test('assignSlots: handles a 6-cycle that defeats greedy earliest-slot placement
     { team: 't3', dm: 'd2' },
     { team: 't1', dm: 'd3' },
   ]
-  const placed = assignSlots(meetings, 2)
+  const slots = numberedSlots(2)
+  const placed = assignSlots(meetings, slots)
   expect(placed).toHaveLength(6)
-  expectValidPlacement(placed, 2)
+  expectValidPlacement(placed, slots)
 })
 
 test('assignSlots: throws when someone exceeds the cap', () => {
-  expect(() => assignSlots([{ team: 't1', dm: 'd1' }, { team: 't1', dm: 'd2' }], 1)).toThrow(/Team t1/)
+  expect(() => assignSlots([{ team: 't1', dm: 'd1' }, { team: 't1', dm: 'd2' }], numberedSlots(1))).toThrow(/Team t1/)
 })
 
 test('buildSchedule on the demo: every chosen meeting is placed', () => {
@@ -108,7 +111,7 @@ test('buildSchedule on the demo: every chosen meeting is placed', () => {
   const chosen = selectMeetings(p)
   const placed = buildSchedule(p)
   expect(placed).toHaveLength(chosen.length)
-  expectValidPlacement(placed, p.slotCount)
+  expectValidPlacement(placed, p.slots)
   const stats = computeStats(p, placed)
   expect(stats.meetings).toBe(placed.length)
   expect(stats.mustMeetSatisfied).toBeGreaterThan(0)
@@ -116,24 +119,24 @@ test('buildSchedule on the demo: every chosen meeting is placed', () => {
 
 test('reassign: frees, assigns, and swaps', () => {
   const start: PlacedMeeting[] = [
-    { team: 't1', dm: 'd1', slot: 0 },
-    { team: 't2', dm: 'd2', slot: 0 },
+    { team: 't1', dm: 'd1', slot: 's1' },
+    { team: 't2', dm: 'd2', slot: 's1' },
   ]
-  expect(reassign(start, 0, 'd1', null)).toEqual([{ team: 't2', dm: 'd2', slot: 0 }])
+  expect(reassign(start, 's1', 'd1', null)).toEqual([{ team: 't2', dm: 'd2', slot: 's1' }])
 
-  const swapped = reassign(start, 0, 'd1', 't2')
-  expect(new Set(swapped.map((m) => `${m.team}-${m.dm}-${m.slot}`))).toEqual(new Set(['t2-d1-0', 't1-d2-0']))
+  const swapped = reassign(start, 's1', 'd1', 't2')
+  expect(new Set(swapped.map((m) => `${m.team}-${m.dm}-${m.slot}`))).toEqual(new Set(['t2-d1-s1', 't1-d2-s1']))
   expect(findIssues(swapped)).toEqual([])
 
-  const moved = reassign([{ team: 't1', dm: 'd1', slot: 0 }], 0, 'd2', 't1')
-  expect(moved).toEqual([{ team: 't1', dm: 'd2', slot: 0 }])
+  const moved = reassign([{ team: 't1', dm: 'd1', slot: 's1' }], 's1', 'd2', 't1')
+  expect(moved).toEqual([{ team: 't1', dm: 'd2', slot: 's1' }])
 })
 
 test('findIssues: reports duplicates and clashes', () => {
   const issues = findIssues([
-    { team: 't1', dm: 'd1', slot: 0 },
-    { team: 't1', dm: 'd1', slot: 1 },
-    { team: 't2', dm: 'd1', slot: 0 },
+    { team: 't1', dm: 'd1', slot: 's1' },
+    { team: 't1', dm: 'd1', slot: 's2' },
+    { team: 't2', dm: 'd1', slot: 's1' },
   ])
   expect(issues.map((i) => i.type)).toEqual(['duplicate', 'dm-clash'])
 })

@@ -10,9 +10,9 @@ describe('sample day', () => {
   test('has the shape of the BSD 2026 first pitching day', () => {
     expect(p.teams).toHaveLength(13)
     expect(p.dms).toHaveLength(17)
-    expect(p.slotCount).toBe(9)
-    expect(p.slotLabels[0]).toBe('15:20')
-    expect(p.slotLabels[8]).toBe('18:00')
+    expect(p.slots).toHaveLength(9)
+    expect(p.slots[0].label).toBe('15:20')
+    expect(p.slots[8].label).toBe('18:00')
   })
 
   test('interest grids are dense enough to be interesting but not full', () => {

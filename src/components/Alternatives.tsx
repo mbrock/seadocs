@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { measure, OBJECTIVES, sameObjectives, type Objectives } from '../lib/objectives'
 import type { Alternative } from '../lib/optimize'
 import type { PlacedMeeting } from '../lib/scheduler'
-import type { Project } from '../lib/state'
+import type { Project } from '../lib/project'
 import { Hint } from './ui'
 
 interface Props {

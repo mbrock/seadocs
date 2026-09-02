@@ -7,7 +7,7 @@
 // same meetings. We try chain swaps that would pull an outlying meeting into
 // a gap, keep the ones that reduce total windows, and stop at a local optimum.
 
-import type { Id, Meeting, PlacedMeeting } from './scheduler'
+import { slotIndex, type Id, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
 
 type Node = string
 const teamNode = (m: Meeting): Node => 't:' + m.team
@@ -84,16 +84,21 @@ class Grid {
 
 const better = (a: [number, number], b: [number, number]) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 
+function gridOf(placed: PlacedMeeting[], slots: Slot[]): Grid {
+  const index = slotIndex(slots)
+  return new Grid(
+    placed.map(({ team, dm }) => ({ team, dm })),
+    placed.map((m) => index.get(m.slot)!),
+  )
+}
+
 /**
  * Reduce decision-maker windows first, then team windows, by Kempe-chain slot
  * swaps. Never changes which meetings happen. Deterministic.
  */
-export function compactSlots(placed: PlacedMeeting[]): PlacedMeeting[] {
+export function compactSlots(placed: PlacedMeeting[], slots: Slot[]): PlacedMeeting[] {
   if (!placed.length) return placed
-  const grid = new Grid(
-    placed.map(({ team, dm }) => ({ team, dm })),
-    placed.map((m) => m.slot),
-  )
+  const grid = gridOf(placed, slots)
   let best = grid.score()
   let improved = true
   while (improved) {
@@ -124,15 +129,12 @@ export function compactSlots(placed: PlacedMeeting[]): PlacedMeeting[] {
       }
     }
   }
-  return placed.map((m, i) => ({ ...m, slot: grid.slot[i] }))
+  return placed.map((m, i) => ({ ...m, slot: slots[grid.slot[i]].id }))
 }
 
 /** Convenience for tests: participant ids with a gap in their day. */
-export function participantsWithWindows(placed: PlacedMeeting[], side: 'team' | 'dm'): Id[] {
-  const grid = new Grid(
-    placed.map(({ team, dm }) => ({ team, dm })),
-    placed.map((m) => m.slot),
-  )
+export function participantsWithWindows(placed: PlacedMeeting[], slots: Slot[], side: 'team' | 'dm'): Id[] {
+  const grid = gridOf(placed, slots)
   return grid
     .nodes(side === 'team' ? 't:' : 'd:')
     .filter((n) => grid.windows(n) > 0)

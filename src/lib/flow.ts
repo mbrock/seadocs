@@ -1,6 +1,6 @@
 // Exact meeting selection by minimum-cost flow.
 //
-// Choosing which pairs meet, with nobody exceeding `slotCount` meetings, is a
+// Choosing which pairs meet, with nobody having more meetings than slots, is a
 // bipartite b-matching: teams on the left, decision makers on the right, one
 // unit of capacity per possible meeting. Maximising the total weight of chosen
 // pairs is a min-cost flow problem, solved exactly here by successive shortest
@@ -26,11 +26,11 @@ interface Edge {
   rev: number
 }
 
-/** The maximum-weight set of meetings where nobody has more than `slotCount`. */
+/** The maximum-weight set of meetings where nobody has more meetings than slots. */
 export function selectByFlow(input: ScheduleInput, { weight, teamFloor = 0 }: FlowOptions): Meeting[] {
   const T = input.teams.length
   const D = input.dms.length
-  const S = input.slotCount
+  const S = input.slots.length
   const SRC = 0
   const SINK = 1
   const teamNode = (t: number) => 2 + t

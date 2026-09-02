@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { selectByFlow } from './flow'
 import { allPairs, type Meeting, type Participant, type ScheduleInput } from './scheduler'
+import { numberedSlots } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
 
 function input(T: number, D: number, slotCount: number, dm: Record<string, number>, team: Record<string, number> = {}): ScheduleInput {
-  return { teams: people('t', T), dms: people('d', D), dmScores: dm, teamScores: team, slotCount }
+  return { teams: people('t', T), dms: people('d', D), dmScores: dm, teamScores: team, slots: numberedSlots(slotCount) }
 }
 
 /** Every subset of pairs respecting the cap, best total weight. Only for tiny inputs. */
@@ -21,7 +22,7 @@ function bruteBest(inp: ScheduleInput, weight: (dm: number, team: number) => num
       const p = pairs[i]
       for (const id of [p.team, p.dm]) {
         load.set(id, (load.get(id) ?? 0) + 1)
-        if (load.get(id)! > inp.slotCount) ok = false
+        if (load.get(id)! > inp.slots.length) ok = false
       }
       total += weight(p.dmScore, p.teamScore)
     }

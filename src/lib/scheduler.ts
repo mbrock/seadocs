@@ -2,11 +2,16 @@
 //
 // Generating a schedule is two separate steps:
 //   1. selectMeetings — decide WHICH pairs meet, respecting the per-person cap
-//      (one meeting per slot means at most `slotCount` meetings each).
+//      (one meeting per slot means at most `slots.length` meetings each).
 //   2. assignSlots    — decide WHEN, so nobody is double-booked. Because the
 //      graph of teams × decision makers is bipartite, König's edge-colouring
 //      theorem guarantees that any selection respecting the cap can always be
-//      fitted into `slotCount` slots. So step 1 never has to worry about time.
+//      fitted into the available slots. So step 1 never has to worry about time.
+//
+// Slots are entities with stable ids, like participants, so that meetings and
+// (later) per-slot availability survive inserting or removing a slot. The
+// algorithms need the slot ORDER, so they take the ordered `Slot[]` and work
+// with indices internally.
 
 export type Id = string
 
@@ -26,8 +31,14 @@ export interface Meeting {
   dm: Id
 }
 
+/** A time slot. Order is given by position in the project's slot list. */
+export interface Slot {
+  id: Id
+  label: string
+}
+
 export interface PlacedMeeting extends Meeting {
-  slot: number
+  slot: Id
 }
 
 export interface Pair extends Meeting {
@@ -42,7 +53,7 @@ export interface ScheduleInput {
   dms: Participant[]
   dmScores: Scores
   teamScores: Scores
-  slotCount: number
+  slots: Slot[]
 }
 
 export const MAX_SCORE = 3
@@ -56,8 +67,13 @@ export function scoreOf(scores: Scores, teamId: Id, dmId: Id): number {
   return scores[pairKey(teamId, dmId)] || 0
 }
 
+/** Slot id -> position, for algorithms that reason about order. */
+export function slotIndex(slots: Slot[]): Map<Id, number> {
+  return new Map(slots.map((s, i) => [s.id, i]))
+}
+
 /** Every team × dm pair with both scores attached, in list order. */
-export function allPairs({ teams, dms, dmScores, teamScores }: Omit<ScheduleInput, 'slotCount'>): Pair[] {
+export function allPairs({ teams, dms, dmScores, teamScores }: Omit<ScheduleInput, 'slots'>): Pair[] {
   const pairs: Pair[] = []
   teams.forEach((t, ti) => {
     dms.forEach((d, di) => {
@@ -85,8 +101,8 @@ export function rankOf(pair: Pair): number {
  * Requested pairs (either side scored > 0) are taken in tiers of descending
  * rank. Within a tier, the pair whose team (then dm) has the fewest meetings
  * so far is taken first, so equal interest is spread fairly instead of by
- * list order. A pair is skipped once either participant already has
- * `slotCount` meetings.
+ * list order. A pair is skipped once either participant already has as many
+ * meetings as there are slots.
  *
  * With `fillGaps`, pairs nobody asked for are added afterwards, again favouring
  * participants with the fewest meetings, until no more fit.
@@ -95,7 +111,8 @@ export function rankOf(pair: Pair): number {
  * not guaranteed optimal.
  */
 export function selectMeetings(input: ScheduleInput & { fillGaps?: boolean }): Meeting[] {
-  const { slotCount, fillGaps = false } = input
+  const { fillGaps = false } = input
+  const slotCount = input.slots.length
   const load = new Map<Id, number>()
   const loadOf = (id: Id) => load.get(id) || 0
   const isFull = (p: Pair) => loadOf(p.team) >= slotCount || loadOf(p.dm) >= slotCount
@@ -130,14 +147,15 @@ export function selectMeetings(input: ScheduleInput & { fillGaps?: boolean }): M
 
 /**
  * Give every meeting a slot so that no participant has two meetings in the
- * same slot. Bipartite edge colouring with `slotCount` colours: succeeds for
- * any input where nobody has more than `slotCount` meetings. Throws otherwise.
+ * same slot. Bipartite edge colouring with one colour per slot: succeeds for
+ * any input where nobody has more meetings than slots. Throws otherwise.
  *
  * Meetings are processed in order and take the earliest slot free for both
  * sides when possible, so higher-priority meetings tend to land earlier.
  */
-export function assignSlots(meetings: Meeting[], slotCount: number): PlacedMeeting[] {
-  const bySlot = new Map<string, Map<number, PlacedMeeting>>()
+export function assignSlots(meetings: Meeting[], slots: Slot[]): PlacedMeeting[] {
+  const slotCount = slots.length
+  const bySlot = new Map<string, Map<number, Placement>>()
   const at = (node: string) => {
     let m = bySlot.get(node)
     if (!m) bySlot.set(node, (m = new Map()))
@@ -151,17 +169,17 @@ export function assignSlots(meetings: Meeting[], slotCount: number): PlacedMeeti
     for (let s = 0; s < slotCount; s++) if (!used.has(s)) return s
     return -1
   }
-  const place = (m: PlacedMeeting, slot: number) => {
+  const place = (m: Placement, slot: number) => {
     m.slot = slot
     at(teamNode(m)).set(slot, m)
     at(dmNode(m)).set(slot, m)
   }
-  const unplace = (m: PlacedMeeting) => {
+  const unplace = (m: Placement) => {
     at(teamNode(m)).delete(m.slot)
     at(dmNode(m)).delete(m.slot)
   }
 
-  const placed: PlacedMeeting[] = meetings.map((m) => ({ team: m.team, dm: m.dm, slot: -1 }))
+  const placed: Placement[] = meetings.map((m) => ({ team: m.team, dm: m.dm, slot: -1 }))
   for (const m of placed) {
     const u = teamNode(m)
     const v = dmNode(m)
@@ -178,7 +196,7 @@ export function assignSlots(meetings: Meeting[], slotCount: number): PlacedMeeti
     // bipartite graph this chain can never reach the team (it would have to
     // arrive via slot a, which the team has free), so afterwards a is free for
     // both sides.
-    const path: PlacedMeeting[] = []
+    const path: Placement[] = []
     let node = v
     let slot = a
     for (;;) {
@@ -192,12 +210,17 @@ export function assignSlots(meetings: Meeting[], slotCount: number): PlacedMeeti
     for (const e of path) place(e, e.slot === a ? b : a)
     place(m, a)
   }
-  return placed
+  return placed.map((m) => ({ team: m.team, dm: m.dm, slot: slots[m.slot].id }))
+}
+
+/** A meeting at a slot POSITION; only used while colouring. */
+interface Placement extends Meeting {
+  slot: number
 }
 
 /** Select and place in one go. */
 export function buildSchedule(input: ScheduleInput, { fillGaps = false } = {}): PlacedMeeting[] {
-  return assignSlots(selectMeetings({ ...input, fillGaps }), input.slotCount)
+  return assignSlots(selectMeetings({ ...input, fillGaps }), input.slots)
 }
 
 /**
@@ -205,7 +228,7 @@ export function buildSchedule(input: ScheduleInput, { fillGaps = false } = {}): 
  * team is already booked with another dm in that slot, the two meetings swap.
  * Returns a new meetings array.
  */
-export function reassign(meetings: PlacedMeeting[], slot: number, dmId: Id, teamId: Id | null): PlacedMeeting[] {
+export function reassign(meetings: PlacedMeeting[], slot: Id, dmId: Id, teamId: Id | null): PlacedMeeting[] {
   const current = meetings.find((m) => m.slot === slot && m.dm === dmId) ?? null
   const out = meetings.filter((m) => m !== current)
   if (teamId === null) return out
@@ -244,9 +267,9 @@ export function indexMeetings(meetings: PlacedMeeting[]): MeetingIndex {
 }
 
 export type Issue =
-  | { type: 'duplicate'; team: Id; dm: Id; slots: [number, number] }
-  | { type: 'team-clash'; team: Id; slot: number }
-  | { type: 'dm-clash'; dm: Id; slot: number }
+  | { type: 'duplicate'; team: Id; dm: Id; slots: [Id, Id] }
+  | { type: 'team-clash'; team: Id; slot: Id }
+  | { type: 'dm-clash'; dm: Id; slot: Id }
 
 /**
  * Problems a generated schedule never has, but manual editing can introduce:
@@ -254,7 +277,7 @@ export type Issue =
  */
 export function findIssues(meetings: PlacedMeeting[]): Issue[] {
   const issues: Issue[] = []
-  const seenPair = new Map<string, number>()
+  const seenPair = new Map<string, Id>()
   const seenTeamSlot = new Set<string>()
   const seenDmSlot = new Set<string>()
   for (const m of meetings) {
@@ -291,7 +314,7 @@ export function computeStats(input: ScheduleInput, meetings: PlacedMeeting[]): S
   const { byPair } = indexMeetings(meetings)
   const stats: Stats = {
     meetings: meetings.length,
-    capacity: input.dms.length * input.slotCount,
+    capacity: input.dms.length * input.slots.length,
     dmRequested: 0,
     dmSatisfied: 0,
     mustMeetRequested: 0,
