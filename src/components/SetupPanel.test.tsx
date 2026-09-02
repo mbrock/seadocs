@@ -3,18 +3,16 @@ import { expect, test } from 'vitest'
 import { emptyProject, withParticipants } from '../lib/project'
 import { SetupPanel } from './SetupPanel'
 
-test('unified Setup exposes the people/day and binary request workflow together', () => {
+test('Setup uses one editable participant and request matrix', () => {
   const project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
-  expect(html).toContain('1 · People &amp; day')
-  expect(html).toContain('2 · Requests')
-  expect(html).toContain('Teams · 1')
-  expect(html).toContain('Decision makers · 1')
   expect(html).toContain('aria-label="team 1"')
   expect(html).toContain('aria-label="DM 1"')
-  expect(html).toContain('Paste a list to add')
-  expect(html).toContain('Existing rows are kept')
-  expect(html).toContain('DM interest: Fund X asks for Alpha')
-  expect(html).toContain('Team interest: Alpha asks for Fund X')
+  expect(html).toContain('DM request: Fund X asks for Alpha')
+  expect(html).toContain('Team request: Alpha asks for Fund X')
+  expect(html).toContain('+ film team')
+  expect(html).toContain('+ DM')
+  expect(html).not.toContain('Move up')
+  expect(html).not.toContain('Random 26')
 })

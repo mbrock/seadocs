@@ -16,9 +16,9 @@ The app has three views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
 save / open / new, and shows a problem count when the board has one.
 
-- **Setup** — a two-step workflow for people/day and requests. Each team and
-  decision maker has its own identity-bearing row, so editing its name or moving
-  the row never changes who it is. Lists can still be pasted in bulk (one
+- **Setup** — one editable matrix: film teams are rows, decision makers are
+  columns, and every cell contains both sides' requests. Editing a row or column
+  name keeps its identity and requests attached. Names can also be pasted in bulk (one
   per line as `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
@@ -26,12 +26,10 @@ save / open / new, and shows a problem count when the board has one.
   `Title = Code` or `Name = Code` to choose the short form yourself; a
   trailing `*` marks someone who joins online), name the event (printed on
   every running order), and list the slots, one line per slot — usually the
-  times. Pasting adds rows and never silently replaces existing people. A review
-  shows additions, identity-preserving renames and deletions before Apply, and
-  destructive deletions require confirmation. Example loaders fill in the BSD 2026 sample
-  day or a random 26 × 26. Unapplied text stays intact while moving around the app.
-  The second step is one compact request grid, rows = teams, columns = decision makers;
-  every cell has two checkboxes, gold for the decision maker and blue for the
+  times. Pasting adds entries and never silently replaces existing people;
+  destructive deletions require confirmation when edits are applied. The sample
+  loader fills in the BSD 2026 day. Unapplied text stays intact while moving around the app.
+  Every matrix cell has two checkboxes, gold for the decision maker and blue for the
   team. Not asked is not a refusal; it only means nobody asked. Decision-maker
   interest is the primary signal; team interest is
   secondary: it is heard once every decision maker has been served as well as
@@ -89,7 +87,7 @@ own country's co-productions).
 It shows the shape of a real day well: with 13 teams and 9 slots there are only
 117 seats, but the decision makers asked for 116 meetings and the teams for
 114, so the teams — not the decision makers — are the bottleneck, and a dozen
-or so decision-maker asks cannot be met whatever the board. *Random 26 × 26* is a larger synthetic stress test.
+or so decision-maker asks cannot be met whatever the board.
 
 ## How the schedule is built
 
@@ -149,8 +147,7 @@ src/index.css              Tailwind + Public Sans import and the colour/font the
 src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, AskPair, ask tints
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
-src/components/SetupPanel.tsx    unified people/day and requests workflow, previews, example loaders
-src/components/InterestPanel.tsx compact two-sided request grid used by Setup
+src/components/SetupPanel.tsx    editable participant/request matrix, day settings and sample loader
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
 src/lib/history.ts         undo/redo stack over immutable project values
@@ -192,14 +189,14 @@ only call its functions and render the result.
 ```
 
 Team, DM and slot IDs are durable references. Names are display data: each
-roster editor row carries its ID, so any rename or reorder keeps requests, availability and meetings
+matrix heading carries its ID, so any rename keeps requests, availability and meetings
 attached. Existing v1 files receive IDs during migration; v2–v4 IDs and linked
 data are retained. A stale `nextId` counter is repaired. Current-format files
 with duplicate identities or dangling requests/meetings are rejected rather
 than guessed at, leaving the project already open in the browser untouched.
 
 Participants and slots have stable ids from one shared counter, so you can add,
-remove, or reorder names in Setup without the interest grid shifting under you,
+remove, or rename people in Setup without requests shifting under you,
 and change the slot count without meetings jumping to different times. Older
 files are converted on open: v1 (the original single-file prototype, everything
 by list position), v2 (`slotCount` + `slotLabels`, meetings by slot position)

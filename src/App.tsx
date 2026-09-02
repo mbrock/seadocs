@@ -93,7 +93,7 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        {/* Keep Setup mounted so unapplied textarea edits survive visits to the board or schedules. */}
+        {/* Keep Setup mounted so unapplied edits survive visits to the board or schedules. */}
         <div hidden={view !== 'setup'}>
           <SetupPanel project={project} onChange={setProject} />
         </div>
