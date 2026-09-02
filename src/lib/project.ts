@@ -49,6 +49,8 @@ export interface RosterEntry {
   name: string
   online: boolean
   code?: string
+  /** Existing participant identity, supplied by the row editor (never parsed from pasted text). */
+  id?: Id
 }
 
 export interface RosterChange {
@@ -140,11 +142,16 @@ export function participantName(project: Project, id: Id): string {
  * rename and also keeps its id. Larger mixed unmatched sets are deliberately
  * not guessed: they could equally be renames or delete/add operations.
  */
-export function reconcileParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): ParticipantReconciliation {
+export function reconcileParticipants(
+  project: Project,
+  teams: (RosterEntry | string)[],
+  dms: (RosterEntry | string)[],
+  explicitIdentity = false,
+): ParticipantReconciliation {
   const counter = { next: project.nextId }
   const entry = (e: RosterEntry | string): RosterEntry => (typeof e === 'string' ? { name: e, online: false } : e)
-  const teamResult = reconcile(project.teams, teams.map(entry), 't', 'team', counter)
-  const dmResult = reconcile(project.dms, dms.map(entry), 'd', 'dm', counter)
+  const teamResult = reconcile(project.teams, teams.map(entry), 't', 'team', counter, explicitIdentity)
+  const dmResult = reconcile(project.dms, dms.map(entry), 'd', 'dm', counter, explicitIdentity)
   const nextTeams = teamResult.people
   const nextDms = dmResult.people
   const teamIds = new Set(nextTeams.map((p) => p.id))
@@ -176,8 +183,8 @@ export function reconcileParticipants(project: Project, teams: (RosterEntry | st
 }
 
 /** Apply a non-ambiguous reconciliation. Call reconcileParticipants first in interactive code. */
-export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): Project {
-  const result = reconcileParticipants(project, teams, dms)
+export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[], explicitIdentity = false): Project {
+  const result = reconcileParticipants(project, teams, dms, explicitIdentity)
   if (result.ambiguous.length) throw new Error('Ambiguous roster edit; apply renames separately from additions or deletions')
   return prune({ ...project, teams: result.teams, dms: result.dms, nextId: result.nextId })
 }
@@ -188,24 +195,28 @@ function reconcile(
   prefix: string,
   side: 'team' | 'dm',
   counter: { next: number },
+  explicitIdentity: boolean,
 ): { people: Participant[]; changes: RosterChange[]; ambiguous: ParticipantReconciliation['ambiguous'] } {
   const normalized = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
   const byName = new Map(existing.map((p) => [normalized(p.name), p]))
+  const byId = new Map(existing.map((p) => [p.id, p]))
   const matched = new Map<number, Participant>()
   const used = new Set<Id>()
   entries.forEach((e, i) => {
-    const old = byName.get(normalized(e.name))
+    const old = (e.id ? byId.get(e.id) : undefined) ?? (!explicitIdentity && !e.id ? byName.get(normalized(e.name)) : undefined)
     if (old && !used.has(old.id)) {
       matched.set(i, old)
       used.add(old.id)
     }
   })
   const oldLeft = existing.filter((p) => !used.has(p.id))
-  const newLeft = entries.map((_, i) => i).filter((i) => !matched.has(i))
-  const ambiguous = oldLeft.length && newLeft.length && (oldLeft.length !== 1 || newLeft.length !== 1)
+  const newLeft = entries.map((_, i) => i).filter((i) => !matched.has(i) && entries[i].id === undefined)
+  const invalidIds = entries.filter((e, i) => e.id !== undefined && !matched.has(i))
+  const ambiguous = !explicitIdentity && oldLeft.length && newLeft.length && (oldLeft.length !== 1 || newLeft.length !== 1)
     ? [{ side, oldNames: oldLeft.map((p) => p.name), newNames: newLeft.map((i) => entries[i].name) }]
     : []
-  if (!ambiguous.length && oldLeft.length === 1 && newLeft.length === 1) {
+  if (invalidIds.length) ambiguous.push({ side, oldNames: [], newNames: invalidIds.map((e) => e.name) })
+  if (!explicitIdentity && !ambiguous.length && oldLeft.length === 1 && newLeft.length === 1) {
     matched.set(newLeft[0], oldLeft[0])
     used.add(oldLeft[0].id)
   }

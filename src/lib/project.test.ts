@@ -24,7 +24,7 @@ test('withParticipants keeps ids for names that survive, so asks survive too', (
   expect(p.teams).toHaveLength(2)
 })
 
-test('a unique rename and reorder preserve identity, requests, availability, and meetings', () => {
+test('identity-bearing rows preserve links across simultaneous renames and reordering', () => {
   let p = withParticipants(emptyProject(), ['Alpha', 'Beta'], ['Fund X', 'Fund Y'])
   const alpha = p.teams[0].id
   const fund = p.dms[0].id
@@ -33,12 +33,27 @@ test('a unique rename and reorder preserve identity, requests, availability, and
   p = withAvailability(p, alpha, slot, false)
   p = { ...p, meetings: [{ team: alpha, dm: fund, slot: p.slots[1].id }] }
 
-  p = withParticipants(p, ['Beta', 'Alpha renamed'], ['Fund Y', 'Fund X'])
+  p = withParticipants(
+    p,
+    [{ id: p.teams[1].id, name: 'Beta renamed', online: false }, { id: alpha, name: 'Alpha renamed', online: false }],
+    [{ id: p.dms[1].id, name: 'Fund Y renamed', online: false }, { id: fund, name: 'Fund X renamed', online: false }],
+    true,
+  )
   expect(p.teams[1]).toMatchObject({ id: alpha, name: 'Alpha renamed', unavailable: [slot] })
   expect(p.dms[1].id).toBe(fund)
   expect(p.dmAsks[pairKey(alpha, fund)]).toBe(true)
   expect(p.teamAsks[pairKey(alpha, fund)]).toBe(true)
   expect(p.meetings).toEqual([{ team: alpha, dm: fund, slot: p.slots[1].id }])
+})
+
+test('explicit delete and add do not transfer the deleted participant identity', () => {
+  let p = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
+  const alpha = p.teams[0].id
+  const fund = p.dms[0]
+  p = toggleAsk(p, 'dm', alpha, fund.id)
+  p = withParticipants(p, [{ name: 'Replacement', online: false }], [{ id: fund.id, name: fund.name, online: false }], true)
+  expect(p.teams[0].id).not.toBe(alpha)
+  expect(p.dmAsks).toEqual({})
 })
 
 test('ambiguous pasted roster replacement is blocked rather than guessed', () => {

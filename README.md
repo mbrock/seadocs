@@ -16,7 +16,9 @@ The app has three views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
 save / open / new, and shows a problem count when the board has one.
 
-- **Setup** — a two-step workflow for people/day and requests. Paste the list of teams and the list of decision makers (one
+- **Setup** — a two-step workflow for people/day and requests. Each team and
+  decision maker has its own identity-bearing row, so editing its name or moving
+  the row never changes who it is. Lists can still be pasted in bulk (one
   per line as `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
@@ -24,9 +26,9 @@ save / open / new, and shows a problem count when the board has one.
   `Title = Code` or `Name = Code` to choose the short form yourself; a
   trailing `*` marks someone who joins online), name the event (printed on
   every running order), and list the slots, one line per slot — usually the
-  times. A review shows additions, identity-preserving renames and deletions
-  before Apply; ambiguous bulk replacements are blocked, and destructive
-  deletions require confirmation. Example loaders fill in the BSD 2026 sample
+  times. Pasting adds rows and never silently replaces existing people. A review
+  shows additions, identity-preserving renames and deletions before Apply, and
+  destructive deletions require confirmation. Example loaders fill in the BSD 2026 sample
   day or a random 26 × 26. Unapplied text stays intact while moving around the app.
   The second step is one compact request grid, rows = teams, columns = decision makers;
   every cell has two checkboxes, gold for the decision maker and blue for the
@@ -241,8 +243,8 @@ only call its functions and render the result.
 }
 ```
 
-Team, DM and slot IDs are durable references. Names are display data: a safe
-rename or reorder keeps the ID, so requests, availability and meetings remain
+Team, DM and slot IDs are durable references. Names are display data: each
+roster editor row carries its ID, so any rename or reorder keeps requests, availability and meetings
 attached. Existing v1 files receive IDs during migration; v2–v4 IDs and linked
 data are retained. A stale `nextId` counter is repaired. Current-format files
 with duplicate identities or dangling requests/meetings are rejected rather
