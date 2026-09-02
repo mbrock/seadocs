@@ -142,9 +142,9 @@ export function BoardPanel({ project, onChange }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       <Panel className="min-w-0">
-        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'}>
+        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'} className="!py-1.5">
           {hasBoard && <Key />}
           {hasBoard && (
             <Segmented
@@ -172,9 +172,10 @@ export function BoardPanel({ project, onChange }: Props) {
             ]}
           />
           {advancedRunning ? (
-            <Button onClick={stopAdvanced}>Cancel</Button>
+            <Button className="!px-2 !py-1" onClick={stopAdvanced}>Cancel</Button>
           ) : (
             <Button
+              className="!px-2 !py-1"
               variant="primary"
               disabled={!hasPeople || !hasRequests}
               title="Generate locally with CP-SAT; no data is uploaded"
@@ -184,6 +185,7 @@ export function BoardPanel({ project, onChange }: Props) {
             </Button>
           )}
           <Button
+            className="!px-2 !py-1"
             disabled={!hasBoard || issues.length > 0}
             title={issues.length > 0 ? 'Fix the problems first' : 'Download the board as a spreadsheet'}
             onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
@@ -193,7 +195,7 @@ export function BoardPanel({ project, onChange }: Props) {
         </PanelHeader>
         {solverProgress && <SolverProgress status={solverProgress} />}
         {advancedStatus && (
-          <div role="status" className="border-b border-rule bg-accent-soft px-3 py-1.5 text-[0.8rem]">
+          <div role="status" className="border-b border-rule bg-accent-soft px-2 py-1 text-[0.8rem]">
             {advancedStatus} · runs only in this browser; no data is uploaded
           </div>
         )}
@@ -267,7 +269,7 @@ function SolverProgress({ status }: { status: SolverStatusInfo }) {
   }
 
   return (
-    <div role="status" aria-live="polite" className="border-b border-rule bg-accent-soft px-3 py-2">
+    <div role="status" aria-live="polite" className="border-b border-rule bg-accent-soft px-2 py-1">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-2">
@@ -284,11 +286,11 @@ function SolverProgress({ status }: { status: SolverStatusInfo }) {
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={completed}
-        className="mt-1.5 h-1 overflow-hidden rounded-full bg-rule"
+        className="mt-1 h-1 overflow-hidden rounded-full bg-rule"
       >
         <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${percent}%` }} />
       </div>
-      <div className="mt-1 flex flex-wrap justify-between gap-x-4 text-[0.65rem] text-muted">
+      <div className="mt-0.5 flex flex-wrap justify-between gap-x-4 text-[0.65rem] text-muted">
         <span>The board stays unchanged until a valid result is ready</span>
         <span>Local only · no data uploaded</span>
       </div>
@@ -333,7 +335,7 @@ function Grid({
           <tr>
             <th className="sticky top-0 left-0 z-30 w-[8.5rem] border-r border-b border-rule bg-paper" />
             {project.slots.map((slot) => (
-              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-1 text-left font-mono text-[0.75rem] font-semibold">
+              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-mono text-[0.75rem] font-semibold">
                 {slotLabel(project, slot.id)}
               </th>
             ))}
@@ -366,7 +368,7 @@ function Grid({
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
                       title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
-                      className={`relative flex h-7 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
+                      className={`relative flex h-6 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
                       } ${off && !partner ? 'hatched' : dmAsked ? askTint.dm : ''} ${partner ? '' : 'text-faint'} ${
                         partner && !dmAsked && !teamAsked ? 'text-muted' : ''
@@ -492,7 +494,7 @@ function Inspector({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-3 border-b border-rule px-3 py-3">
+      <div className="flex items-start justify-between gap-2 border-b border-rule px-2 py-1.5">
         <div className="min-w-0">
           <div className="eyebrow">{time}</div>
           <div className="truncate text-[1rem] font-bold" title={anchorPerson.name}>
@@ -506,7 +508,7 @@ function Inspector({
       </div>
 
       {anchorOff ? (
-        <div className="px-3 py-3">
+        <div className="px-2 py-1.5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-semibold">Not available at {time}</div>
@@ -517,7 +519,7 @@ function Inspector({
         </div>
       ) : (
         <>
-          <div className="border-b border-rule px-3 py-3">
+          <div className="border-b border-rule px-2 py-1.5">
             {current && cur ? (
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -536,7 +538,7 @@ function Inspector({
             )}
           </div>
 
-          <div className="px-3 py-3">
+          <div className="px-2 py-1.5">
             <div className="eyebrow mb-1">{current ? 'Replace with' : 'Book'}</div>
             {list(requested)}
             {unrequested.length > 0 && (
@@ -553,7 +555,7 @@ function Inspector({
             )}
           </div>
 
-          <div className="border-t border-rule px-3 py-2">
+          <div className="border-t border-rule px-2 py-1">
             <Button variant="quiet" onClick={() => onAvailability(anchor, slot, false)} title="Blocks this slot; any meeting here is removed">
               {anchorCode} can't do {time}
             </Button>
@@ -595,7 +597,7 @@ function CandidateList({
           <button
             type="button"
             onClick={() => onPick(r.person.id)}
-            className="flex w-full cursor-pointer items-center justify-between gap-2 py-1.5 text-left hover:bg-canvas"
+            className="flex w-full cursor-pointer items-center justify-between gap-2 py-1 text-left hover:bg-canvas"
           >
             <span className="min-w-0">
               <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
@@ -651,16 +653,16 @@ function NotScheduled({
 
   return (
     <Panel>
-      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} />
-      <div className="px-3 py-3">
+      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} className="!py-1" />
+      <div className="px-2 py-1">
         {stats.unmet.length === 0 ? (
           <p className="text-[0.8rem] text-muted">Every request got a meeting.</p>
         ) : (
-          <ul className="grid gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-x-3 sm:grid-cols-2 xl:grid-cols-3">
             {stats.unmet.map((p) => (
-              <li key={pairKey(p.team, p.dm)} className="flex min-w-0 items-center justify-between gap-3 border-b border-rule py-2" title={`rank ${rankOf(p)}`}>
-                <span className="min-w-0 text-[0.82rem]">
-                  <span className="block truncate font-semibold">
+              <li key={pairKey(p.team, p.dm)} className="flex min-w-0 items-center justify-between gap-2 border-b border-rule py-0.5" title={`rank ${rankOf(p)}`}>
+                <span className="min-w-0 truncate text-[0.78rem]">
+                  <span className="font-semibold">
                     {p.dmAsked ? (
                       <>
                         {name(p.dm)} <span className="text-muted">→</span> {name(p.team)}
@@ -670,8 +672,8 @@ function NotScheduled({
                         {name(p.team)} <span className="text-muted">→</span> {name(p.dm)}
                       </>
                     )}
-                  </span>
-                  <span className="block truncate text-[0.72rem] text-muted">{why(p)}</span>
+                  </span>{' '}
+                  <span className="text-[0.7rem] text-muted">· {why(p)}</span>
                 </span>
                 <AskPair dm={p.dmAsked} team={p.teamAsked} />
               </li>
