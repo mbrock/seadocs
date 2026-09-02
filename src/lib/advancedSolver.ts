@@ -7,9 +7,6 @@ export interface AdvancedSolverInput extends ScheduleInput {
   currentBoard: PlacedMeeting[]
   /** A valid board from the legacy JavaScript scheduler, used only as a search hint. */
   fallbackHint: PlacedMeeting[]
-  /** When set, give every objective stage this much time instead of splitting maxTimeMs. */
-  stageTimeMs?: number
-  maxTimeMs?: number
 }
 
 export type AdvancedResultKind = 'optimal' | 'feasible' | 'infeasible' | 'failed'
@@ -45,7 +42,6 @@ export interface SolveResponse {
 export interface SolverStatusInfo {
   state: 'loading' | 'initializing' | 'building' | 'phase-started' | 'incumbent' | 'phase-complete' | 'complete' | 'failed'
   elapsedMs: number
-  mode?: 'quick' | 'thorough'
   phase?: SolverPhase['name']
   phaseIndex?: number
   totalPhases?: number

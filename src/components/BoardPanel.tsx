@@ -46,8 +46,6 @@ export function BoardPanel({ project, onChange }: Props) {
   const hasBoard = project.meetings.length > 0
   const [rows, setRows] = useState<Side>('dm')
   const [cell, setCell] = useState<Cell | null>(null)
-  const [solveMode, setSolveMode] = useState<'quick' | 'thorough'>('quick')
-  const [advancedStatus, setAdvancedStatus] = useState<string | null>(null)
   const [solverProgress, setSolverProgress] = useState<SolverStatusInfo | null>(null)
   const [advancedRunning, setAdvancedRunning] = useState(false)
   const cancelAdvanced = useRef<(() => void) | null>(null)
@@ -88,7 +86,6 @@ export function BoardPanel({ project, onChange }: Props) {
       cancelAdvanced.current = null
       setAdvancedRunning(false)
       setSolverProgress(null)
-      setAdvancedStatus('Solve cancelled because the scheduling input changed · board unchanged')
     }
   }, [inputKey])
 
@@ -97,8 +94,8 @@ export function BoardPanel({ project, onChange }: Props) {
   const applyFallback = (reason: string) => {
     if (fallbackHint.length) setMeetings(fallbackHint)
     setSolverProgress(null)
-    setAdvancedStatus(`Fallback schedule used — ${reason}`)
     setAdvancedRunning(false)
+    console.warn(`[CP-SAT] fallback schedule used · ${reason}`)
   }
   const advancedResult = (result: AdvancedSolverResult) => {
     cancelAdvanced.current = null
@@ -114,17 +111,14 @@ export function BoardPanel({ project, onChange }: Props) {
       return
     }
     setMeetings(result.meetings)
-    const seconds = (result.runtimeMs / 1000).toFixed(1)
-    setAdvancedStatus(result.kind === 'optimal' ? `OPTIMAL · all objective stages proven · ${seconds}s` : `FEASIBLE · time-limited, some objective stages unproven · ${seconds}s`)
   }
   const runAdvanced = () => {
     cancelAdvanced.current?.()
     setAdvancedRunning(true)
-    setAdvancedStatus(null)
-    setSolverProgress({ state: 'loading', mode: solveMode, elapsedMs: 0, totalPhases: 7 })
+    setSolverProgress({ state: 'loading', elapsedMs: 0, totalPhases: 7 })
     advancedInputKey.current = inputKey
     cancelAdvanced.current = startAdvancedSolve(
-      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint, maxTimeMs: 3000, ...(solveMode === 'thorough' ? { stageTimeMs: 1000 } : {}) },
+      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint },
       advancedResult,
       (message) => {
         cancelAdvanced.current = null
@@ -138,8 +132,11 @@ export function BoardPanel({ project, onChange }: Props) {
     cancelAdvanced.current = null
     setAdvancedRunning(false)
     setSolverProgress(null)
-    setAdvancedStatus('Solve cancelled · board unchanged')
   }
+
+  const progressStage = solverProgress?.phaseIndex ?? 0
+  const progressTotal = solverProgress?.totalPhases ?? 7
+  const progressPercent = solverProgress ? (progressStage ? progressStage / progressTotal * 100 : solverProgress.state === 'initializing' ? 6 : 3) : 0
 
   return (
     <div className="flex flex-col gap-2">
@@ -161,29 +158,21 @@ export function BoardPanel({ project, onChange }: Props) {
               ]}
             />
           )}
-          <Segmented
-            label="Solve mode"
-            size="sm"
-            value={solveMode}
-            onChange={setSolveMode}
-            options={[
-              { value: 'quick', label: 'Quick', title: 'Return the best valid schedule found in about three seconds' },
-              { value: 'thorough', label: 'Thorough', title: 'Give each of the seven objective stages up to one second' },
-            ]}
-          />
-          {advancedRunning ? (
-            <Button className="!px-2 !py-1" onClick={stopAdvanced}>Cancel</Button>
-          ) : (
-            <Button
-              className="!px-2 !py-1"
-              variant="primary"
-              disabled={!hasPeople || !hasRequests}
-              title="Generate locally with CP-SAT; no data is uploaded"
-              onClick={runAdvanced}
-            >
-              Generate
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            className="relative w-[7.5rem] justify-center overflow-hidden !px-2 !py-1"
+            disabled={!advancedRunning && (!hasPeople || !hasRequests)}
+            title={advancedRunning ? 'Cancel generation' : 'Generate schedule'}
+            aria-label={advancedRunning ? `Cancel generation, stage ${progressStage} of ${progressTotal}` : 'Generate schedule'}
+            onClick={advancedRunning ? stopAdvanced : runAdvanced}
+          >
+            {advancedRunning && (
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-paper/25">
+                <span className="block h-full bg-paper/80 transition-[width] duration-200" style={{ width: `${progressPercent}%` }} />
+              </span>
+            )}
+            <span className="relative">{advancedRunning ? `Cancel · ${progressStage}/${progressTotal}` : 'Generate'}</span>
+          </Button>
           <Button
             className="!px-2 !py-1"
             disabled={!hasBoard || issues.length > 0}
@@ -193,12 +182,6 @@ export function BoardPanel({ project, onChange }: Props) {
             CSV
           </Button>
         </PanelHeader>
-        {solverProgress && <SolverProgress status={solverProgress} />}
-        {advancedStatus && (
-          <div role="status" className="border-b border-rule bg-accent-soft px-2 py-1 text-[0.8rem]">
-            {advancedStatus} · runs only in this browser; no data is uploaded
-          </div>
-        )}
         {hasBoard ? (
           <Grid project={project} names={names} index={index} available={available} rows={rows} selected={selected} onSelect={setCell} />
         ) : (
@@ -231,73 +214,6 @@ export function BoardPanel({ project, onChange }: Props) {
     </div>
   )
 }
-
-function SolverProgress({ status }: { status: SolverStatusInfo }) {
-  const total = status.totalPhases ?? 7
-  const phase = status.phaseIndex ?? 0
-  const completed = status.state === 'complete' ? total : status.state === 'phase-complete' ? phase : status.state === 'building' ? phase : Math.max(0, phase - 1)
-  const percent = Math.min(100, Math.round((completed / total) * 100))
-  const mode = status.mode === 'thorough' ? 'Thorough solve' : 'Quick solve'
-  const stage = phase > 0 ? `Stage ${phase} of ${total}` : 'Preparing'
-  const value = status.objectiveValue ?? status.result?.value
-  const bound = status.bestObjectiveBound ?? status.result?.bound
-  let title = 'Loading local solver'
-  let detail = 'Downloading solver code and WebAssembly'
-
-  if (status.state === 'initializing') {
-    title = 'Initializing solver'
-    detail = 'Starting WebAssembly in this browser'
-  } else if (status.state === 'building') {
-    title = phase === 0 ? 'Building preference model' : 'Building compactness model'
-    detail = phase === 0 ? 'Preparing pair and slot choices' : 'Adding decision-maker gap calculations'
-  } else if (status.state === 'phase-started') {
-    title = `${status.direction === 'minimize' ? 'Minimizing' : 'Maximizing'} ${status.phase}`
-    detail = status.timeLimitSeconds === undefined ? 'Searching for the best value' : `Up to ${status.timeLimitSeconds.toFixed(2)}s for this stage`
-  } else if (status.state === 'incumbent') {
-    title = `Searching ${status.phase}`
-    detail = [value === undefined ? '' : `Best found ${value}`, bound === undefined ? '' : `best possible bound ${bound}`].filter(Boolean).join(' · ')
-  } else if (status.state === 'phase-complete') {
-    title = `${status.phase} complete`
-    const outcome = status.result?.status === 'optimal' ? 'Proven optimal' : status.result?.status === 'feasible' ? 'Time limit reached' : 'No new solution found'
-    detail = [outcome, value === undefined ? '' : `value ${value}`, bound === undefined ? '' : `bound ${bound}`].filter(Boolean).join(' · ')
-  } else if (status.state === 'complete') {
-    title = 'Schedule ready'
-    detail = status.resultKind === 'optimal' ? 'All seven stages proven optimal' : 'Best validated schedule found within the limits'
-  } else if (status.state === 'failed') {
-    title = 'Solver failed'
-    detail = status.message ?? 'The fallback schedule will be used'
-  }
-
-  return (
-    <div role="status" aria-live="polite" className="border-b border-rule bg-accent-soft px-2 py-1">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-[0.82rem] font-semibold">{title}</span>
-            <span className="eyebrow text-[0.62rem]">{mode} · {stage}</span>
-          </div>
-          <div className="mt-0.5 truncate text-[0.72rem] text-muted">{detail}</div>
-        </div>
-        <span className="shrink-0 font-mono text-[0.72rem] tabular-nums text-muted">{(status.elapsedMs / 1000).toFixed(1)}s</span>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="Solver stages completed"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={completed}
-        className="mt-1 h-1 overflow-hidden rounded-full bg-rule"
-      >
-        <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${percent}%` }} />
-      </div>
-      <div className="mt-0.5 flex flex-wrap justify-between gap-x-4 text-[0.65rem] text-muted">
-        <span>The board stays unchanged until a valid result is ready</span>
-        <span>Local only · no data uploaded</span>
-      </div>
-    </div>
-  )
-}
-
 /** Bar at the cell's right edge: the team asked for this meeting. */
 function TeamBar({ show, className = '' }: { show: boolean; className?: string }) {
   if (!show) return null

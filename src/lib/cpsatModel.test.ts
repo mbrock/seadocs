@@ -7,7 +7,7 @@ import { sampleProject } from './sample'
 import { optimize } from './optimize'
 
 const participant = (id: string, unavailable?: string[]) => ({ id, name: id, ...(unavailable ? { unavailable } : {}) })
-const solve = (input: Omit<AdvancedSolverInput, 'currentBoard' | 'fallbackHint'>) => solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], maxTimeMs: 700 })
+const solve = (input: Omit<AdvancedSolverInput, 'currentBoard' | 'fallbackHint'>) => solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [] })
 
 describe('integrated CP-SAT model', () => {
   test('protects a mutual request at a one-slot bottleneck', async () => {
@@ -52,13 +52,13 @@ describe('integrated CP-SAT model', () => {
     expect(result.kind === 'optimal').toBe(result.phases.every((p) => p.status === 'optimal'))
   })
 
-  test('thorough mode gives every stage the same one-second limit', async () => {
+  test('gives every stage the same one-second limit', async () => {
     const input = {
       teams: [participant('t1'), participant('t2')], dms: [participant('d1')], slots: numberedSlots(1),
       dmAsks: { 't1|d1': true, 't2|d1': true } as const, teamAsks: { 't1|d1': true } as const,
     }
     const statuses: import('./advancedSolver').SolverStatusInfo[] = []
-    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], stageTimeMs: 1000 }, (status) => statuses.push(status))
+    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [] }, (status) => statuses.push(status))
     expect(result.kind).toBe('optimal')
     expect(result.phases.every((phase) => phase.status === 'optimal')).toBe(true)
     expect(result.phases.map((phase) => phase.name)).toEqual([
@@ -80,7 +80,7 @@ describe('integrated CP-SAT model', () => {
   test('solves the deterministic 13×17 sample at normal event scale', async () => {
     const project = sampleProject()
     const fallbackHint = optimize(project)[0].meetings
-    const result = await solveWithCpSat(api, { ...project, currentBoard: [], fallbackHint, maxTimeMs: 3000 })
+    const result = await solveWithCpSat(api, { ...project, currentBoard: [], fallbackHint })
     console.log(`CP-SAT 13×17×9: ${result.kind}, ${result.meetings?.length ?? 0} meetings, ${result.runtimeMs.toFixed(0)}ms`)
     expect(result.kind === 'optimal' || result.kind === 'feasible').toBe(true)
     expect(validateAdvancedBoard(project, result.meetings ?? [])).toEqual([])

@@ -137,7 +137,6 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
   const solver: CpSolver = await api.CpSolver.create()
   const phases: SolverPhase[] = []
   const floors: Partial<Record<keyof ModelState['metrics'], { direction: Direction; value: number }>> = {}
-  const budget = Math.max(700, input.maxTimeMs ?? 3000)
   let incumbent = validateAdvancedBoard(input, input.fallbackHint).length ? [] : input.fallbackHint
   let hasSolverIncumbent = false
   let allOptimal = true
@@ -181,20 +180,16 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
 
   onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 0, totalPhases: 7 })
   const a = buildModel(api, input, false, floors, incumbent)
-  // Portable CP-SAT needs enough time to get through first-solve startup even
-  // on tiny fixtures; later stages usually prove before their limit.
-  const short = Math.max(0.15, budget / 1000 / 9)
-  const limit = (multiple = 1) => input.stageTimeMs === undefined ? short * multiple : input.stageTimeMs / 1000
-  run(a, 'mutual requests', 'mutual', 'max', 1, limit())
-  run(a, 'DM requests', 'dmRequested', 'max', 2, limit())
-  run(a, 'teams served', 'teamsServed', 'max', 3, limit())
-  run(a, 'team requests', 'teamRequested', 'max', 4, limit())
-  run(a, 'total meetings', 'total', 'max', 5, limit())
+  run(a, 'mutual requests', 'mutual', 'max', 1, 1)
+  run(a, 'DM requests', 'dmRequested', 'max', 2, 1)
+  run(a, 'teams served', 'teamsServed', 'max', 3, 1)
+  run(a, 'team requests', 'teamRequested', 'max', 4, 1)
+  run(a, 'total meetings', 'total', 'max', 5, 1)
 
   onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 5, totalPhases: 7 })
   const b = buildModel(api, input, true, floors, incumbent)
-  run(b, 'DM gaps', 'dmGaps', 'min', 6, limit(2))
-  run(b, 'stability', 'stable', 'max', 7, limit())
+  run(b, 'DM gaps', 'dmGaps', 'min', 6, 1)
+  run(b, 'stability', 'stable', 'max', 7, 1)
 
   const runtimeMs = performance.now() - started
   if (!hasSolverIncumbent && !incumbent.length && input.teams.length && input.dms.length && Object.keys(input.dmAsks).length + Object.keys(input.teamAsks).length > 0) {

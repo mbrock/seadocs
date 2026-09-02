@@ -21,7 +21,7 @@ describe('advanced worker client', () => {
     const log = vi.spyOn(console, 'info').mockImplementation(() => {})
     startAdvancedSolve(input, result, vi.fn(), status, () => worker)
     worker.onmessage!({ data: { type: 'status', runId: worker.sent!.runId, status: { state: 'phase-started', elapsedMs: 10, phase: 'DM requests' } } } as MessageEvent)
-    expect(log).toHaveBeenCalledWith('[CP-SAT] CP-SAT · ?/7 DM requests · maximizing · no time limit · elapsed 0.01s')
+    expect(log).toHaveBeenCalledWith('[CP-SAT] ?/7 DM requests · maximizing · no time limit · elapsed 0.01s')
     expect(status).toHaveBeenCalledWith({ state: 'phase-started', elapsedMs: 10, phase: 'DM requests' })
     expect(result).not.toHaveBeenCalled()
     expect(worker.terminated).toBe(false)
@@ -29,14 +29,14 @@ describe('advanced worker client', () => {
   })
 
   test('formats useful progress, proof, and incumbent details', () => {
-    expect(formatSolverStatus({ state: 'phase-started', mode: 'quick', elapsedMs: 420, phase: 'DM gaps', phaseIndex: 5, totalPhases: 7, direction: 'minimize', timeLimitSeconds: 0.67 })).toBe(
-      '[CP-SAT] Quick · 5/7 DM gaps · minimizing · 0.67s limit · elapsed 0.42s',
+    expect(formatSolverStatus({ state: 'phase-started', elapsedMs: 420, phase: 'DM gaps', phaseIndex: 5, totalPhases: 7, direction: 'minimize', timeLimitSeconds: 1 })).toBe(
+      '[CP-SAT] 5/7 DM gaps · minimizing · 1.00s limit · elapsed 0.42s',
     )
-    expect(formatSolverStatus({ state: 'incumbent', mode: 'thorough', elapsedMs: 1234, phase: 'DM requests', phaseIndex: 2, totalPhases: 7, objectiveValue: 91, bestObjectiveBound: 94, solverWallTime: 0.8 })).toBe(
-      '[CP-SAT] Thorough · 2/7 DM requests · new incumbent 91 · best possible bound 94 · stage time 0.80s · elapsed 1.23s',
+    expect(formatSolverStatus({ state: 'incumbent', elapsedMs: 1234, phase: 'DM requests', phaseIndex: 2, totalPhases: 7, objectiveValue: 91, bestObjectiveBound: 94, solverWallTime: 0.8 })).toBe(
+      '[CP-SAT] 2/7 DM requests · new incumbent 91 · best possible bound 94 · stage time 0.80s · elapsed 1.23s',
     )
-    expect(formatSolverStatus({ state: 'phase-complete', mode: 'quick', elapsedMs: 900, phase: 'mutual requests', phaseIndex: 1, totalPhases: 7, result: { name: 'mutual requests', status: 'optimal', value: 42, bound: 42 } })).toBe(
-      '[CP-SAT] Quick · 1/7 mutual requests · OPTIMAL (proven) · final value 42 · best possible bound 42 · elapsed 0.90s',
+    expect(formatSolverStatus({ state: 'phase-complete', elapsedMs: 900, phase: 'mutual requests', phaseIndex: 1, totalPhases: 7, result: { name: 'mutual requests', status: 'optimal', value: 42, bound: 42 } })).toBe(
+      '[CP-SAT] 1/7 mutual requests · OPTIMAL (proven) · final value 42 · best possible bound 42 · elapsed 0.90s',
     )
   })
 
