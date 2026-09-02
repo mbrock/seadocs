@@ -43,3 +43,11 @@ test('request color persists while fulfillment checks disappear during generatio
   expect(generating).toContain('bg-emerald-600')
   expect(generating).not.toContain('✓')
 })
+
+test('film-team rows use board codes while retaining the full title', () => {
+  const project = withParticipants(emptyProject(), ['The Crust of Europe'], ['Fund X'])
+  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} generating={false} />)
+
+  expect(html).toContain('title="The Crust of Europe"')
+  expect(html).toContain('>Europe</span>')
+})

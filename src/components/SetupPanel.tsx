@@ -133,6 +133,7 @@ function RequestMatrix({
                   <EditableParticipant
                     person={person}
                     display={names.get(person.id)}
+                    variant={kind === 'team' ? 'code' : 'short'}
                     label={`${rowSide} ${rowIndex + 1}`}
                     placeholder={kind === 'dm' ? 'Name | Organisation, Country' : 'Film team'}
                     onChange={(text) => onEdit(person.id, text)}
@@ -183,6 +184,7 @@ function RequestMatrix({
 function EditableParticipant({
   person,
   display,
+  variant,
   label,
   placeholder,
   onChange,
@@ -190,6 +192,7 @@ function EditableParticipant({
 }: {
   person: Participant
   display?: DisplayName
+  variant: 'short' | 'code'
   label: string
   placeholder: string
   onChange: (text: string) => void
@@ -208,7 +211,7 @@ function EditableParticipant({
       />
       {value && (
         <span className="pointer-events-none absolute inset-y-0 left-0 right-3 flex items-center peer-focus:hidden">
-          <Name person={person} display={display} className="flex" />
+          <Name person={person} display={display} variant={variant} className="flex" />
         </span>
       )}
       <button
