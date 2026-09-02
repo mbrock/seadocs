@@ -1,0 +1,12 @@
+{
+  "name": "meeting-board",
+  "version": "0.1.0",
+  "description": "One-to-one meeting scheduler for festival marketplaces: project teams × decision makers.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "start": "npx -y serve -l 8000 ."
+  },
+  "engines": { "node": ">=20" }
+}

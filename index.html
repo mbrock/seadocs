@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Board — one-to-one scheduler</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <div>
+      <h1>Meeting Board</h1>
+      <div class="sub">One-to-one scheduler — teams × decision makers</div>
+    </div>
+    <div class="sub" id="headerStamp"></div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Steps">
+    <button class="tab-btn active" data-tab="setup">1. Setup</button>
+    <button class="tab-btn" data-tab="prefs">2. Interest</button>
+    <button class="tab-btn" data-tab="schedule">3. Schedule</button>
+    <button class="tab-btn" data-tab="person">4. Personal boards</button>
+  </nav>
+
+  <section class="card muted">
+    <h2>Saving</h2>
+    <p class="hint">Everything you do is saved automatically in this browser — nothing goes to a server. To move the project to another computer, or hand it to a colleague, save a project file and open it there.</p>
+    <button class="ghost" id="saveProjectBtn">Save project file</button>
+    <button class="ghost" id="openProjectBtn">Open project file</button>
+    <button class="ghost danger" id="resetBtn">Start over</button>
+    <input type="file" id="loadFile" accept=".json,application/json" hidden>
+    <span class="stamp" id="saveStamp"></span>
+  </section>
+
+  <!-- 1. SETUP -->
+  <section class="panel active" id="panel-setup">
+    <div class="card">
+      <h2>Participants</h2>
+      <p class="hint">One name per line. Teams become the columns of the interest grid, decision makers the rows. You can come back and add or remove names later without losing the interest you've already recorded.</p>
+      <div class="row">
+        <div>
+          <label class="small" for="teamsInput">Project teams</label>
+          <textarea id="teamsInput" placeholder="Team A&#10;Team B&#10;..."></textarea>
+        </div>
+        <div>
+          <label class="small" for="dmsInput">Decision makers</label>
+          <textarea id="dmsInput" placeholder="Commissioner A&#10;Fund B&#10;..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Slots</h2>
+      <p class="hint">How many meeting slots are there across the day(s)? Every participant can have at most one meeting per slot, so this is also the most meetings any one person can have.</p>
+      <div class="row">
+        <div>
+          <label class="small" for="slotCount">Number of slots</label>
+          <input type="number" id="slotCount" value="10" min="1" max="60">
+        </div>
+        <div>
+          <label class="small" for="slotLabels">Slot labels (optional, one per line — e.g. times)</label>
+          <textarea id="slotLabels" class="short" placeholder="09:00&#10;09:20&#10;09:40&#10;..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <button class="action" id="applySetupBtn">Save setup →</button>
+      <button class="ghost" id="loadDemoBtn">Load demo data (26 × 26)</button>
+      <span class="stamp" id="setupStamp"></span>
+    </div>
+  </section>
+
+  <!-- 2. INTEREST -->
+  <section class="panel" id="panel-prefs">
+    <div class="card">
+      <h2>Interest grids</h2>
+      <p class="hint">Two grids, same layout. <strong>Decision-maker interest is the primary driver</strong> of the schedule: those meetings are placed first, strongest interest first. Team interest only breaks ties between meetings a decision maker rated equally, and lets a team request a meeting the decision maker didn't ask for (those are placed last).</p>
+      <div class="tabs subtabs" id="matrixTabs">
+        <button class="tab-btn active" data-mode="dm">Decision-maker interest (primary)</button>
+        <button class="tab-btn" data-mode="team">Team interest (tie-breaker)</button>
+      </div>
+      <p class="hint" id="matrixModeHint"></p>
+      <div class="toolbar">
+        <div class="key">
+          <span><span class="swatch s0"></span>0 none</span>
+          <span><span class="swatch s1"></span>1 interested</span>
+          <span><span class="swatch s2"></span>2 priority</span>
+          <span><span class="swatch s3"></span>3 must-meet</span>
+        </div>
+        <div>
+          <button class="ghost" id="randomizeBtn">Randomise both (for testing)</button>
+          <button class="ghost danger" id="clearScoresBtn">Clear both</button>
+        </div>
+      </div>
+      <div class="matrix-scroll" id="matrixWrap"></div>
+    </div>
+  </section>
+
+  <!-- 3. SCHEDULE -->
+  <section class="panel" id="panel-schedule">
+    <div class="card">
+      <h2>Generate</h2>
+      <p class="hint">Chooses which meetings happen (highest decision-maker interest first, then team interest, spreading equal interest evenly across teams), then fits every chosen meeting into the slots. Generating again replaces any manual changes.</p>
+      <label class="check">
+        <input type="checkbox" id="fillGaps"> Fill leftover gaps with pairings nobody asked for (off = leave those slots free)
+      </label>
+      <div>
+        <button class="action" id="generateBtn">Generate schedule</button>
+        <button class="ghost" id="exportBoardBtn">Export board CSV</button>
+        <button class="ghost" id="exportPersonalBtn">Export personal schedules CSV</button>
+      </div>
+      <div id="statsWrap"></div>
+      <div id="unmetWrap"></div>
+    </div>
+    <div class="card">
+      <h2>Board</h2>
+      <p class="hint">Columns = decision makers, rows = slots. Scroll sideways for the rest. Change any cell to reassign it — picking a team that's already booked in that slot swaps the two meetings. Cell colour shows how keen the decision maker was.</p>
+      <div id="issuesWrap"></div>
+      <div class="board-wrap" id="boardWrap"></div>
+    </div>
+  </section>
+
+  <!-- 4. PERSONAL BOARDS -->
+  <section class="panel" id="panel-person">
+    <div class="card">
+      <h2>Personal boards</h2>
+      <p class="hint">Pick a team or decision maker to see their running order — this is what you'd print or send them.</p>
+      <div class="toolbar">
+        <select id="personSelect"></select>
+        <button class="ghost" id="printBtn">Print this board</button>
+      </div>
+      <div class="print-area" id="personWrap"></div>
+    </div>
+  </section>
+
+  <p class="footer-note">Meeting Board · <a href="https://github.com/mbrock/seadocs">source</a></p>
+</div>
+<script type="module" src="app/main.js"></script>
+</body>
+</html>
