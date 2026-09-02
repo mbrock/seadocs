@@ -119,8 +119,11 @@ function RequestMatrix({
               </th>
               {columns.map((person) => (
                 <th key={person.id} className="relative h-20 w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
-                  <span className="absolute bottom-0 left-0 inline-flex origin-bottom-left -rotate-45 items-center border-b border-rule pl-2 whitespace-nowrap">
-                    <Name person={person} display={names.get(person.id)} variant="code" />
+                  <span aria-hidden="true" className="absolute bottom-0 left-0 h-3 border-l border-rule" />
+                  <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center border-b border-rule whitespace-nowrap">
+                    <span className="inline-flex translate-y-full pl-2">
+                      <Name person={person} display={names.get(person.id)} variant="code" />
+                    </span>
                   </span>
                 </th>
               ))}
