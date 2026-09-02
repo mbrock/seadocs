@@ -2,23 +2,19 @@
 @import '@fontsource-variable/public-sans';
 
 @theme {
-  /* Surfaces and text */
-  --color-paper: #ffffff;
-  --color-canvas: #f4f1ea;
-  --color-ink: #111517;
-  --color-muted: #667078;
-  --color-faint: #a8b0b6;
-  --color-rule: #ded8ce;
-  --color-accent: #9a3248;
-  --color-accent-soft: #f6e9ec;
+  /* Semantic colors follow the root color-scheme; components need no dark overrides. */
+  --color-paper: light-dark(#ffffff, #141719);
+  --color-canvas: light-dark(#f4f1ea, #1d2124);
+  --color-ink: light-dark(#111517, #f4f1ea);
+  --color-muted: light-dark(#667078, #a9b0b5);
+  --color-faint: light-dark(#a8b0b6, #737c82);
+  --color-rule: light-dark(#ded8ce, #394045);
+  --color-accent: light-dark(#9a3248, #d0667c);
   /* Problems only: clashes, repeats, people booked when they cannot come */
-  --color-warn: #c0392b;
+  --color-warn: light-dark(#c0392b, #f07167);
 
   /* Requests */
-  --color-gold-2: #e6c975;
-  --color-gold-3: #b07d12;
-  --color-sea-2: #9fc8e1;
-  --color-sea-3: #2d8fbd;
+  --color-sea-3: light-dark(#2d8fbd, #63b9de);
 
   --font-sans: 'Public Sans Variable', 'Public Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -29,7 +25,7 @@
     font-size: 15px;
   }
   body {
-    @apply bg-paper text-ink font-sans antialiased;
+    @apply font-sans antialiased;
     line-height: 1.45;
   }
   button,

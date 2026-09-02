@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import type { Project } from './lib/project'
+import { withMeetings, type Project } from './lib/project'
+import type { PlacedMeeting } from './lib/scheduler'
 import { loadLocal, saveLocal } from './lib/persist'
 import { commit, initialHistory, redo, undo } from './lib/history'
 import { Toolbar } from './components/Toolbar'
@@ -9,9 +10,14 @@ import { sampleProject } from './lib/sample'
 
 export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadLocal() ?? sampleProject()))
+  const [generating, setGenerating] = useState(false)
   const project = history.present
   const setProject: Dispatch<SetStateAction<Project>> = useCallback(
     (action) => setHistory((h) => commit(h, typeof action === 'function' ? action(h.present) : action)),
+    [],
+  )
+  const setGeneratedMeetings = useCallback(
+    (meetings: PlacedMeeting[]) => setHistory((h) => ({ ...h, present: withMeetings(h.present, meetings) })),
     [],
   )
 
@@ -30,7 +36,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col print:block">
+    <div className="flex min-h-screen flex-col bg-paper text-ink dark:scheme-dark print:block print:scheme-light">
       <header className="sticky top-0 z-40 border-b border-rule bg-canvas print:hidden">
         <div className="wrap flex flex-wrap items-center gap-x-5 gap-y-1 py-1.5">
           <span className="text-[0.85rem] font-extrabold tracking-[-0.02em] whitespace-nowrap">Meeting Board</span>
@@ -49,19 +55,17 @@ export default function App() {
 
       <main className="wrap flex-1 py-3 print:p-0">
         <div className="flex flex-col gap-3">
-          <SetupPanel project={project} onChange={setProject} />
+          <SetupPanel project={project} onChange={setProject} generating={generating} />
           <section id="board" className="scroll-mt-12">
-            <BoardPanel project={project} onChange={setProject} />
+            <BoardPanel
+              project={project}
+              onChange={setProject}
+              onGeneratedMeetings={setGeneratedMeetings}
+              onGeneratingChange={setGenerating}
+            />
           </section>
         </div>
       </main>
-
-      <footer className="wrap border-t border-rule py-3 text-[0.8rem] text-muted print:hidden">
-        Meeting Board ·{' '}
-        <a className="underline hover:text-ink" href="https://github.com/mbrock/seadocs">
-          source
-        </a>
-      </footer>
     </div>
   )
 }

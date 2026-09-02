@@ -21,62 +21,19 @@ export function Button({ variant = 'default', className = '', ...props }: Button
   )
 }
 
-/** A radio group that looks like connected buttons. */
-export function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T
-  options: { value: T; label: ReactNode; title?: string }[]
-  onChange: (v: T) => void
-  label: string
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[3px] border border-rule bg-paper">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          title={o.title}
-          aria-checked={o.value === value}
-          onClick={() => onChange(o.value)}
-          className={`cursor-pointer px-2 py-0.5 text-[0.8rem] font-semibold first:rounded-l-[2px] last:rounded-r-[2px] ${
-            o.value === value ? 'bg-ink text-paper' : 'text-muted hover:bg-canvas hover:text-ink'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <section className={`rounded-[4px] border border-rule bg-paper ${className}`}>{children}</section>
-}
-
-/** Panel title row: eyebrow-styled title on the left, controls on the right. */
-export function PanelHeader({ title, children }: { title: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-rule px-2 py-1">
-      <h2 className="eyebrow text-ink">{title}</h2>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
-    </div>
-  )
 }
 
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="px-2 py-3 text-center text-[0.9rem] text-muted">{children}</p>
 }
 
-/** Two small marks: gold when the decision maker asked, sea when the team asked; hollow otherwise. */
+/** Two small marks: green when the decision maker asked, blue when the team asked; hollow otherwise. */
 export function AskPair({ dm, team }: { dm: boolean; team: boolean }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1" title={askedBy(dm, team)} aria-label={askedBy(dm, team)}>
-      <span aria-hidden className={`h-2.5 w-2.5 rounded-full border ${dm ? 'border-gold-3 bg-gold-3' : 'border-rule'}`} />
+      <span aria-hidden className={`h-2.5 w-2.5 rounded-full border ${dm ? 'border-emerald-600 bg-emerald-600' : 'border-rule'}`} />
       <span aria-hidden className={`h-2.5 w-2.5 rounded-full border ${team ? 'border-sea-3 bg-sea-3' : 'border-rule'}`} />
     </span>
   )
@@ -102,8 +59,8 @@ export function Name({
   const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
   return (
     <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
-      <span className="truncate">{text}</span>
       {display?.tag && <Tag>{display.tag}</Tag>}
+      <span className="truncate">{text}</span>
       <OnlineMark show={person.online} />
     </span>
   )
@@ -112,7 +69,7 @@ export function Name({
 /** Small-caps style label, e.g. a country code after a name. */
 function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="ml-1 shrink-0 self-center rounded-[2px] border border-current/30 px-[3px] text-[0.58rem] leading-[1.4] font-bold tracking-[0.08em] text-current opacity-70">
+    <span className="mr-1 shrink-0 self-center rounded-[2px] border border-current/30 px-[3px] text-[0.58rem] leading-[1.4] font-bold tracking-[0.08em] text-current opacity-70">
       {children}
     </span>
   )

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'r
 import { availabilityOfProject, emptyProject, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
-import { download } from '../lib/csv'
+import { boardCsv, download } from '../lib/csv'
 import { sampleProject } from '../lib/sample'
 import { Button } from './ui'
 
@@ -72,6 +72,14 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
       <span className="mx-1 h-4 w-px bg-rule" />
       <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download the project as a file">
         Save
+      </Button>
+      <Button
+        variant="quiet"
+        disabled={project.meetings.length === 0 || issues > 0}
+        title={issues > 0 ? 'Fix the problems first' : 'Export the board as a spreadsheet'}
+        onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
+      >
+        Export
       </Button>
       <Button variant="quiet" onClick={() => fileInput.current?.click()} title="Open a project file">
         Open

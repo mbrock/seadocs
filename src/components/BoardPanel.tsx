@@ -1,37 +1,33 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   assignCell,
   assignEffect,
-  computeStats,
-  findIssues,
   indexMeetings,
   isRefused,
   pairKey,
   asked,
-  rankOf,
   type AssignEffect,
   type Availability,
   type Id,
   type MeetingIndex,
-  type Pair,
   type Participant,
   type PlacedMeeting,
   type Side,
-  type Stats,
 } from '../lib/scheduler'
 import { availabilityOfProject, participantName, slotLabel, withAvailability, withMeetings, type Project } from '../lib/project'
-import { boardCsv, download } from '../lib/csv'
 import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, Name, OnlineMark, Panel, PanelHeader, AskPair, Segmented } from './ui'
+import { Button, Empty, Name, OnlineMark, Panel, AskPair } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
-import { validateAdvancedBoard, type AdvancedSolverResult, type SolverStatusInfo } from '../lib/advancedSolver'
+import { validateAdvancedBoard } from '../lib/advancedSolver'
 
 interface Props {
   project: Project
   onChange: Dispatch<SetStateAction<Project>>
+  onGeneratedMeetings: (meetings: PlacedMeeting[]) => void
+  onGeneratingChange: (generating: boolean) => void
 }
 
 /** A board cell: one slot for one participant on the `side` shown down the left. */
@@ -48,23 +44,14 @@ interface BoardData {
   available: Availability
 }
 
-const askTint = { dm: 'bg-gold-2 text-ink' } as const
-
-export function BoardPanel({ project, onChange }: Props) {
+export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratingChange }: Props) {
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const hasBoard = project.meetings.length > 0
-  const [rows, setRows] = useState<Side>('dm')
   const [cell, setCell] = useState<Cell | null>(null)
-  const [solverProgress, setSolverProgress] = useState<SolverStatusInfo | null>(null)
-  const [advancedRunning, setAdvancedRunning] = useState(false)
-  const cancelAdvanced = useRef<(() => void) | null>(null)
-  const advancedInputKey = useRef<string | null>(null)
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
   const names = useNames(project)
   const { teams, dms, dmAsks, teamAsks, slots } = project
   const available = useMemo(() => availabilityOfProject({ teams, dms }), [teams, dms])
-  const stats = useMemo(() => computeStats(project, project.meetings), [project])
-  const issues = useMemo(() => findIssues(project.meetings, available), [project.meetings, available])
   // The old scheduler is deliberately invisible: only an incumbent hint and
   // emergency fallback if local WASM cannot return a valid solution.
   const fallbackHint = useMemo(
@@ -72,6 +59,13 @@ export function BoardPanel({ project, onChange }: Props) {
     [hasPeople, teams, dms, dmAsks, teamAsks, slots],
   )
   const hasRequests = Object.keys(dmAsks).length + Object.keys(teamAsks).length > 0
+  const solveKey = JSON.stringify([
+    teams.map(({ id, unavailable }) => [id, unavailable]),
+    dms.map(({ id, unavailable }) => [id, unavailable]),
+    Object.keys(dmAsks).sort(),
+    Object.keys(teamAsks).sort(),
+    slots.map(({ id }) => id),
+  ])
 
   // Forget the selection when its slot or participant disappears.
   const cellValid =
@@ -87,124 +81,80 @@ export function BoardPanel({ project, onChange }: Props) {
   }, [])
 
   const setMeetings = (meetings: PlacedMeeting[]) => onChange((p) => withMeetings(p, meetings))
-  const inputKey = JSON.stringify([teams, dms, dmAsks, teamAsks, slots, project.meetings])
 
-  useEffect(() => {
-    if (cancelAdvanced.current && advancedInputKey.current !== inputKey) {
-      cancelAdvanced.current?.()
-      cancelAdvanced.current = null
-      setAdvancedRunning(false)
-      setSolverProgress(null)
-    }
-  }, [inputKey])
-
-  useEffect(() => () => cancelAdvanced.current?.(), [])
-
-  const applyFallback = (reason: string) => {
-    if (fallbackHint.length) setMeetings(fallbackHint)
-    setSolverProgress(null)
-    setAdvancedRunning(false)
-    console.warn(`[CP-SAT] fallback schedule used · ${reason}`)
-  }
-  const advancedResult = (result: AdvancedSolverResult) => {
-    cancelAdvanced.current = null
-    setAdvancedRunning(false)
-    setSolverProgress(null)
-    if (!result.meetings || (result.kind !== 'optimal' && result.kind !== 'feasible')) {
-      applyFallback(result.message ?? 'the local CP-SAT solver returned no valid board')
+  const startSolve = useEffectEvent(() => {
+    if (!hasPeople || !hasRequests) {
+      if (project.meetings.length) onGeneratedMeetings([])
+      onGeneratingChange(false)
       return
     }
-    const errors = validateAdvancedBoard({ teams, dms, dmAsks, teamAsks, slots }, result.meetings)
-    if (errors.length) {
-      applyFallback(`the local solver result was rejected (${errors[0]})`)
-      return
+
+    const input = { teams, dms, dmAsks, teamAsks, slots }
+    let active = true
+    onGeneratingChange(true)
+    const finishWithFallback = (reason: string) => {
+      if (!active) return
+      onGeneratedMeetings(fallbackHint)
+      onGeneratingChange(false)
+      console.warn(`[CP-SAT] fallback schedule used · ${reason}`)
     }
-    setMeetings(result.meetings)
-  }
-  const runAdvanced = () => {
-    cancelAdvanced.current?.()
-    setAdvancedRunning(true)
-    setSolverProgress({ state: 'loading', elapsedMs: 0, totalPhases: 7 })
-    advancedInputKey.current = inputKey
-    cancelAdvanced.current = startAdvancedSolve(
-      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint },
-      advancedResult,
-      (message) => {
-        cancelAdvanced.current = null
-        applyFallback(message)
+    const cancel = startAdvancedSolve(
+      {
+        ...input,
+        currentBoard: project.meetings,
+        fallbackHint,
       },
-      setSolverProgress,
+      (result) => {
+        if (!active) return
+        if (!result.meetings || (result.kind !== 'optimal' && result.kind !== 'feasible')) {
+          finishWithFallback(result.message ?? 'the local CP-SAT solver returned no valid board')
+          return
+        }
+        const errors = validateAdvancedBoard(input, result.meetings)
+        if (errors.length) {
+          finishWithFallback(`the local solver result was rejected (${errors[0]})`)
+          return
+        }
+        onGeneratedMeetings(result.meetings)
+        onGeneratingChange(false)
+      },
+      finishWithFallback,
     )
-  }
-  const stopAdvanced = () => {
-    cancelAdvanced.current?.()
-    cancelAdvanced.current = null
-    setAdvancedRunning(false)
-    setSolverProgress(null)
-  }
+    return () => {
+      active = false
+      cancel()
+    }
+  })
 
-  const progressStage = solverProgress?.phaseIndex ?? 0
-  const progressTotal = solverProgress?.totalPhases ?? 7
-  const progressPercent = solverProgress ? (progressStage ? progressStage / progressTotal * 100 : solverProgress.state === 'initializing' ? 6 : 3) : 0
+  useEffect(() => startSolve(), [solveKey])
+
   const board = { project, names, index, available }
 
   return (
     <div className="flex flex-col gap-2">
-      <Panel className="min-w-0">
-        <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'}>
-          {hasBoard && <Key />}
-          {hasBoard && (
-            <Segmented
-              label="Rows"
-              value={rows}
-              onChange={(v) => {
-                setRows(v)
-                setCell(null)
-              }}
-              options={[
-                { value: 'dm', label: 'Decision makers' },
-                { value: 'team', label: 'Teams' },
-              ]}
-            />
-          )}
-          <Button
-            variant="primary"
-            className="relative w-[7.5rem] justify-center overflow-hidden"
-            disabled={!advancedRunning && (!hasPeople || !hasRequests)}
-            title={advancedRunning ? 'Cancel generation' : 'Generate schedule'}
-            aria-label={advancedRunning ? `Cancel generation, stage ${progressStage} of ${progressTotal}` : 'Generate schedule'}
-            onClick={advancedRunning ? stopAdvanced : runAdvanced}
-          >
-            {advancedRunning && (
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-paper/25">
-                <span className="block h-full bg-paper/80 transition-[width] duration-200" style={{ width: `${progressPercent}%` }} />
-              </span>
-            )}
-            <span className="relative">{advancedRunning ? `Cancel · ${progressStage}/${progressTotal}` : 'Generate'}</span>
-          </Button>
-          <Button
-            disabled={!hasBoard || issues.length > 0}
-            title={issues.length > 0 ? 'Fix the problems first' : 'Download the board as a spreadsheet'}
-            onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
-          >
-            CSV
-          </Button>
-        </PanelHeader>
-        {hasBoard ? (
-          <Grid board={board} rows={rows} selected={selected} onSelect={setCell} />
-        ) : (
+      {hasBoard ? (
+        <>
+          <Panel className="min-w-0">
+            <Grid board={board} rows="dm" selected={selected} onSelect={setCell} />
+          </Panel>
+          <Panel className="min-w-0">
+            <Grid board={board} rows="team" selected={selected} onSelect={setCell} />
+          </Panel>
+        </>
+      ) : (
+        <Panel className="min-w-0">
           <Empty>
             {!hasPeople
-              ? 'Add people and interest first.'
+              ? 'Add people and requests first.'
               : !hasRequests
-                ? 'Nobody has asked for a meeting yet — fill in the interest grid.'
-                : 'Generate builds the board from the interest grids.'}
+                ? 'Nobody has asked for a meeting yet.'
+                : 'Building the board…'}
           </Empty>
-        )}
-      </Panel>
+        </Panel>
+      )}
 
-      <aside className={selected ? 'rounded-[4px] border border-rule bg-paper' : ''}>
-        {selected ? (
+      {selected && (
+        <aside className="rounded-[4px] border border-rule bg-paper">
           <Inspector
             board={board}
             cell={selected}
@@ -212,17 +162,10 @@ export function BoardPanel({ project, onChange }: Props) {
             onAvailability={(id, slot, ok) => onChange((p) => withAvailability(p, id, slot, ok))}
             onClose={() => setCell(null)}
           />
-        ) : (
-          <NotScheduled board={board} stats={stats} hasBoard={hasBoard} />
-        )}
-      </aside>
+        </aside>
+      )}
     </div>
   )
-}
-/** Bar at the cell's right edge: the team asked for this meeting. */
-function TeamBar({ show, className = '' }: { show: boolean; className?: string }) {
-  if (!show) return null
-  return <span aria-hidden className={`h-full w-[3px] bg-sea-3 ${className}`} />
 }
 
 /** Rows = one side (decision makers or teams), columns = slots. */
@@ -249,7 +192,9 @@ function Grid({
       <table className="w-full table-fixed border-separate border-spacing-0 text-[0.8rem]" style={{ minWidth: `${8.5 + 5.5 * project.slots.length}rem` }}>
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 w-[8.5rem] border-r border-b border-rule bg-paper" />
+            <th className="sticky top-0 left-0 z-30 w-[8.5rem] border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left text-[0.72rem] font-semibold">
+              {rows === 'dm' ? 'Decision makers' : 'Teams'}
+            </th>
             {project.slots.map((slot) => (
               <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-mono text-[0.75rem] font-semibold">
                 {slotLabel(project, slot.id)}
@@ -284,19 +229,19 @@ function Grid({
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
                       title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
-                      className={`relative flex h-6 w-full cursor-pointer items-center px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
+                      className={`relative flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
-                      } ${off && !partner ? 'hatched' : dmAsked ? askTint.dm : ''} ${partner ? '' : 'text-faint'} ${
+                      } ${off && !partner ? 'hatched' : ''} ${partner ? '' : 'text-faint'} ${
                         partner && !dmAsked && !teamAsked ? 'text-muted' : ''
                       }`}
                     >
+                      {partner && <AskPair dm={dmAsked} team={teamAsked} />}
                       {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : off ? null : <span>·</span>}
                       {(repeat || (off && partner)) && (
                         <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 text-[0.65rem] font-bold text-warn">
                           {repeat ? '×2' : '!'}
                         </span>
                       )}
-                      <TeamBar show={teamAsked} className="absolute top-0 right-0" />
                     </button>
                   </td>
                 )
@@ -305,29 +250,6 @@ function Grid({
           ))}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-/** What the cell colours mean: gold tint = the decision maker asked; the bar at the right edge = the team asked. */
-function Key() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
-        <span aria-hidden className={`h-3 w-3 rounded-[2px] border border-rule ${askTint.dm}`} /> DM asked
-      </span>
-      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
-        <span className="relative inline-flex h-3 w-3 border border-rule">
-          <TeamBar show className="absolute top-0 right-0" />
-        </span>{' '}
-        team asked
-      </span>
-      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
-        <span aria-hidden className="h-3 w-3 rounded-[2px] border border-rule bg-paper" /> nobody asked
-      </span>
-      <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted">
-        <span aria-hidden className="hatched h-3 w-3 rounded-[2px] border border-rule" /> not available
-      </span>
     </div>
   )
 }
@@ -523,72 +445,5 @@ function CandidateList({
         </li>
       ))}
     </ul>
-  )
-}
-
-/** Requested meetings that did not fit, shown below the full-width board. */
-function NotScheduled({
-  board,
-  stats,
-  hasBoard,
-}: {
-  board: BoardData
-  stats: Stats
-  hasBoard: boolean
-}) {
-  if (!hasBoard) return null
-  const { project, names, index, available } = board
-  const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
-  const label = (slot: Id) => slotLabel(project, slot)
-
-  // Why a requested pair got no meeting: who is full, or where they could still fit.
-  const load = new Map<Id, number>()
-  for (const m of project.meetings) {
-    load.set(m.team, (load.get(m.team) ?? 0) + 1)
-    load.set(m.dm, (load.get(m.dm) ?? 0) + 1)
-  }
-  const canDo = (id: Id) => project.slots.filter((s) => available(id, s.id)).length
-  const full = (id: Id) => (load.get(id) ?? 0) >= canDo(id)
-  const why = (p: Pair): string => {
-    if (full(p.dm) && full(p.team)) return 'both full'
-    if (full(p.dm)) return 'DM full'
-    if (full(p.team)) return 'team full'
-    const open = project.slots.find(
-      (s) => available(p.dm, s.id) && available(p.team, s.id) && !index.byCell.has(`${s.id}|${p.dm}`) && !index.byTeamSlot.has(`${s.id}|${p.team}`),
-    )
-    return open ? `both free at ${label(open.id)}` : 'no slot free for both'
-  }
-
-  return (
-    <Panel>
-      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} />
-      <div className="px-2 py-1">
-        {stats.unmet.length === 0 ? (
-          <p className="text-[0.8rem] text-muted">Every request got a meeting.</p>
-        ) : (
-          <ul className="grid gap-x-3 sm:grid-cols-2 xl:grid-cols-3">
-            {stats.unmet.map((p) => (
-              <li key={pairKey(p.team, p.dm)} className="flex min-w-0 items-center justify-between gap-2 border-b border-rule py-0.5" title={`rank ${rankOf(p)}`}>
-                <span className="min-w-0 truncate text-[0.78rem]">
-                  <span className="font-semibold">
-                    {p.dmAsked ? (
-                      <>
-                        {name(p.dm)} <span className="text-muted">→</span> {name(p.team)}
-                      </>
-                    ) : (
-                      <>
-                        {name(p.team)} <span className="text-muted">→</span> {name(p.dm)}
-                      </>
-                    )}
-                  </span>{' '}
-                  <span className="text-[0.7rem] text-muted">· {why(p)}</span>
-                </span>
-                <AskPair dm={p.dmAsked} team={p.teamAsked} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Panel>
   )
 }

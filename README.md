@@ -8,42 +8,41 @@ with which decision maker in which slot.
 
 It is a static site with no server. Everything stays in the browser (autosaved
 to localStorage); projects are saved as JSON files you can email to a colleague.
+The interface follows the browser's light or dark system preference.
 
 ## What it does
 
 Setup and the generated board share one page. The header bar holds undo / redo,
-save / open / new, and the sample loader, and shows a problem count linking to
-the board when it has one. With no saved browser state, the sample day is loaded
-automatically.
+save / export / open / new, and the sample loader, and shows a problem count
+linking to the board when it has one. With no saved browser state, the sample
+day is loaded automatically.
 
-- **Setup** — one editable matrix: film teams are rows, decision makers are
-  columns, and every cell contains both sides' requests. Editing a row or column
-  name keeps its identity and requests attached. Names can also be pasted in bulk (one
-  per line as `Name | Organisation, Country`; the country becomes a small tag
+- **Setup** — two request matrices, one for each side. Decision makers edit
+  their names and requests down the rows of the first; film teams do the same
+  in the second. The other side appears as read-only columns. Adding, editing,
+  deleting, and changing a request all take effect immediately. A green or blue
+  square means that side requested the meeting; its check mark means the current
+  schedule fulfills it. Checks disappear while a replacement schedule is solving.
+  Names use
+  `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
   Evening — the way a crew refers to films it knows by heart; write
   `Title = Code` or `Name = Code` to choose the short form yourself; a
-  trailing `*` marks someone who joins online). Pasting adds entries and never
-  silently replaces existing people; destructive deletions require confirmation
-  when edits are applied. Meeting times come from the loaded project and are not
-  currently editable in the UI.
-  Every matrix cell has two checkboxes, gold for the decision maker and blue for the
-  team. Not asked is not a refusal; it only means nobody asked. Decision-maker
+  trailing `*` marks someone who joins online. Meeting times come from the loaded
+  project and are not currently editable in the UI. Not asked is not a refusal;
+  it only means nobody asked. Decision-maker
   interest is the primary signal; team interest is
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
   (placed if there's room).
-- **Board** — *Generate* runs the local CP-SAT solver and puts its board on
-  screen, giving each of the seven objective stages up to one second. The
-  button fills as the stages advance and can be clicked again to cancel. The
-  current board stays visible while generation runs. Rows are decision makers
-  (or teams),
-  columns are slots; the key in the panel header explains the cells: gold
-  means the decision maker asked for this meeting, the blue bar at a cell's
-  right edge means the team asked, a white cell with a name is a meeting
-  nobody asked for, and a hatched cell is a slot that person cannot do. Red is
-  reserved for problems.
+- **Board** — changing a request automatically starts the local CP-SAT solver,
+  giving each of its seven objective stages up to one second. A further input
+  change hard-cancels the current Worker and immediately starts a fresh solve.
+  Both board orientations are always visible: decision makers × slots and teams
+  × slots. A green dot means the decision maker asked for the meeting, a blue
+  dot means the team asked, and a hatched cell is a slot that person cannot do.
+  Red is reserved for problems.
   Click any cell to open it in the side panel: who is there (with *Remove*),
   and every counterpart that could be booked, strongest request first, each
   marked with what picking it would do — *free now*, *swap* (the two meetings
@@ -53,21 +52,14 @@ automatically.
   counterparts that would break either rule are not listed, only counted
   ("Not listed: 4 already meet Kawakami today"). The same panel is where you
   record that someone **can't do a slot** — "Kawakami can't do 15:20" blocks
-  the cell (and removes any meeting there). When no cell is selected the side
-  panel shows the board's
-  figures (DM and team asks met / asked, windows, DMs under half, teams left out), any
-  *problems* (a repeat, a double booking or a meeting at a blocked time, which
-  only a hand-written file can contain — the editor cannot create one), how
-  many meetings each decision maker got of those they asked for (worst first),
-  and the requested meetings that did not fit, each with why (both full, DM
-  full, team full, or the slot where both are still free). Export is disabled
-  while problems remain. The solver runs entirely in a Web Worker in this
-  browser and never uploads roster or interest data.
+  the cell (and removes any meeting there). Export is disabled while problems
+  remain. The solver runs entirely in a Web Worker in this browser and never
+  uploads roster or interest data.
 Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
 
-*BSD 2026 sample day* in Setup fills in a realistic instance: the 13
+*BSD 2026 sample day* from the header fills in a realistic instance: the 13
 projects pitched on the first day of the 30th Baltic Sea Docs (Riga,
 10 September 2026), the 17 decision makers in the room, and nine 20-minute
 slots from 15:20 to 18:00. Names and countries are from the public programme;
@@ -84,16 +76,15 @@ or so decision-maker asks cannot be met whatever the board.
 
 ## How the schedule is built
 
-Generate lazily loads the portable WebAssembly build of
+The first automatic solve lazily loads the portable WebAssembly build of
 `cpsat-js@1.3.0` in an app-owned module Worker. The model decides whether each
 team × decision-maker pair meets **and** its slot together, so availability,
 one meeting per person per slot, and pair uniqueness are hard constraints
 rather than assumptions made before placement. Every returned board is checked
 again by ordinary TypeScript before it can replace the board on screen.
 While solving, the Worker sends structured loading, model-building, stage,
-incumbent, bound and completion status objects to the main thread; these are
-reflected in the Generate button and rendered as detailed `[CP-SAT]` lines in
-the browser console.
+incumbent, bound and completion status objects to the main thread and renders
+detailed `[CP-SAT]` lines in the browser console.
 
 Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at
@@ -142,10 +133,10 @@ index.html                 Vite entry
 src/main.tsx               mounts <App/>
 src/index.css              Tailwind + Public Sans import and the colour/font theme
 src/App.tsx                page layout, project history (undo/redo), localStorage autosave
-src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Name, AskPair
-src/components/Toolbar.tsx       clashes, undo / redo, save / open / new / sample (in the header)
-src/components/SetupPanel.tsx    editable participant/request matrix
-src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
+src/components/ui.tsx      shared pieces: Button, Panel, Name, AskPair
+src/components/Toolbar.tsx       clashes, undo / redo, save / export / open / new / sample
+src/components/SetupPanel.tsx    editable participant/request matrices
+src/components/BoardPanel.tsx    automatic solve, both board grids, cell inspector
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
 src/lib/scheduler.ts       participants and availability, greedy selection, slot assignment (edge colouring), cell edits and their effects, stats, issues
