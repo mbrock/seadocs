@@ -2,19 +2,19 @@
 @import '@fontsource-variable/public-sans';
 
 @theme {
-  /* Semantic colors follow the root color-scheme; components need no dark overrides. */
-  --color-paper: light-dark(#ffffff, #141719);
-  --color-canvas: light-dark(#f4f1ea, #1d2124);
-  --color-ink: light-dark(#111517, #f4f1ea);
-  --color-muted: light-dark(#667078, #a9b0b5);
-  --color-faint: light-dark(#a8b0b6, #737c82);
-  --color-rule: light-dark(#ded8ce, #394045);
-  --color-accent: light-dark(#9a3248, #d0667c);
+  /* Components only use semantic colors; the system dark palette is set once below. */
+  --color-paper: #ffffff;
+  --color-canvas: #f4f1ea;
+  --color-ink: #111517;
+  --color-muted: #667078;
+  --color-faint: #a8b0b6;
+  --color-rule: #ded8ce;
+  --color-accent: #9a3248;
   /* Problems only: clashes, repeats, people booked when they cannot come */
-  --color-warn: light-dark(#c0392b, #f07167);
+  --color-warn: #c0392b;
 
   /* Requests */
-  --color-sea-3: light-dark(#2d8fbd, #63b9de);
+  --color-sea-3: #2d8fbd;
 
   --font-sans: 'Public Sans Variable', 'Public Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -22,6 +22,7 @@
 
 @layer base {
   html {
+    color-scheme: light;
     font-size: 15px;
   }
   body {
@@ -34,6 +35,21 @@
   textarea {
     font: inherit;
     color: inherit;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-paper: #141719;
+    --color-canvas: #1d2124;
+    --color-ink: #f4f1ea;
+    --color-muted: #a9b0b5;
+    --color-faint: #737c82;
+    --color-rule: #394045;
+    --color-accent: #d0667c;
+    --color-warn: #f07167;
+    --color-sea-3: #63b9de;
   }
 }
 
@@ -57,6 +73,18 @@
 }
 
 @media print {
+  :root {
+    color-scheme: light;
+    --color-paper: #ffffff;
+    --color-canvas: #f4f1ea;
+    --color-ink: #111517;
+    --color-muted: #667078;
+    --color-faint: #a8b0b6;
+    --color-rule: #ded8ce;
+    --color-accent: #9a3248;
+    --color-warn: #c0392b;
+    --color-sea-3: #2d8fbd;
+  }
   html {
     font-size: 11pt;
   }
