@@ -1,5 +1,5 @@
-import { asked, indexMeetings } from './scheduler'
-import { participantName, slotLabel, tableLabel, type AskKind, type Project } from './project'
+import { indexMeetings } from './scheduler'
+import { participantName, slotLabel, tableLabel, type Project } from './project'
 
 function csv(rows: string[][]): string {
   return rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -17,19 +17,6 @@ export function boardCsv(project: Project): string {
         return m ? participantName(project, m.team) : ''
       }),
     ])
-  }
-  return csv(rows)
-}
-
-/**
- * One side's asks as a grid: rows = decision makers, columns = teams, an x
- * where there is an ask. Fill it in a spreadsheet and paste it back into Interest.
- */
-export function interestCsv(project: Project, kind: AskKind): string {
-  const asks = kind === 'dm' ? project.dmAsks : project.teamAsks
-  const rows = [[kind === 'dm' ? 'Decision maker asks' : 'Team asks', ...project.teams.map((t) => t.name)]]
-  for (const d of project.dms) {
-    rows.push([d.name, ...project.teams.map((t) => (asked(asks, t.id, d.id) ? 'x' : ''))])
   }
   return csv(rows)
 }

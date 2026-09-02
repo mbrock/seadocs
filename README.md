@@ -25,18 +25,13 @@ save / open / new, and shows a problem count when the board has one.
   trailing `*` marks someone who joins online), name the event (printed on
   every running order), and list the slots, one line per slot — usually the
   times. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
-- **Interest** — two grids, rows = decision makers, columns = teams; a cell
-  is either **asked** or not. Not asked is not a refusal; it only means nobody
-  asked. *Decision makers ask* is the primary signal; *Teams ask* is
+- **Interest** — one compact grid, rows = teams, columns = decision makers;
+  every cell has two checkboxes, gold for the decision maker and blue for the
+  team. Not asked is not a refusal; it only means nobody asked. Decision-maker
+  interest is the primary signal; team interest is
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
-  (placed if there's room). You edit one person's asks at a time — pick them on
-  the left, tick everyone they want on the right, with the other side's ask
-  shown alongside — or switch to *Overview* for the whole grid on a wide
-  screen. Asks usually arrive in a spreadsheet: *Paste* takes a grid copied
-  from one (names across the top and down the side, either way round, `x`,
-  `1` or `yes` in the asked cells, names matched loosely) and *CSV* exports
-  the grid in the same shape.
+  (placed if there's room).
 - **Board** — the solver runs on the current input as you work; *Generate*
   puts its **recommended** board on screen: the one that misses the fewest
   decision-maker asks, then leaves the fewest decision makers with under half
@@ -204,7 +199,7 @@ src/App.tsx                header, hash-routed views, project history (undo/redo
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, AskPair, ask tints
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
 src/components/SetupPanel.tsx    rosters, event name, slots, example loaders
-src/components/InterestPanel.tsx dense grid and one-person-at-a-time editor
+src/components/InterestPanel.tsx compact two-sided interest grid
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/components/Frontier.tsx      which board is on screen, and the folded-away comparison of alternatives
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
@@ -215,7 +210,6 @@ src/lib/flow.ts            exact max-weight selection via min-cost flow
 src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's days
 src/lib/objectives.ts      the objective vector, dominance, frontier merge
 src/lib/describe.ts        boards in words: names by trade-off, one-line quality
-src/lib/import.ts          interest grids pasted from a spreadsheet
 src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
 src/lib/project.ts         project model: participants, slots, asks, meetings, with* update functions
 src/lib/persist.ts         project file format (v4) with v1–v3 migration, localStorage
