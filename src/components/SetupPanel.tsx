@@ -107,6 +107,16 @@ function RequestMatrix({
   const rowSide = kind === 'dm' ? 'DM' : 'team'
   const addLabel = kind === 'dm' ? '+ DM' : '+ film team'
   const asks = kind === 'dm' ? project.dmAsks : project.teamAsks
+  const longestHeader = Math.max(
+    0,
+    ...columns.map((person) => {
+      const display = names.get(person.id)
+      return Array.from([display?.tag, display?.code ?? person.name].filter(Boolean).join(' ')).length
+    }),
+  )
+  // A 45° label rises by roughly 0.7 of its width. Reserve only what the
+  // longest displayed label needs, plus room for the text below its guide.
+  const headerHeight = `${Math.max(5, 2.25 + longestHeader * 0.38)}rem`
 
   return (
     <section className="w-fit max-w-full min-w-0">
@@ -114,11 +124,11 @@ function RequestMatrix({
         <table className="mr-16 w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
-              <th className="sticky left-0 z-30 h-20 w-px border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
+              <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
                 {rowSide === 'DM' ? 'Decision maker' : 'Team'}
               </th>
               {columns.map((person) => (
-                <th key={person.id} className="relative h-20 w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
+                <th key={person.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
                   <span aria-hidden="true" className="absolute bottom-0 left-0 h-3 border-l border-rule" />
                   <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center border-b border-rule whitespace-nowrap">
                     <span className="inline-flex translate-y-full pl-2">

@@ -133,14 +133,9 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
   return (
     <>
       {hasBoard ? (
-        <>
-          <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
-            <Grid board={board} rows="dm" selected={selected} onSelect={setCell} />
-          </Panel>
-          <Panel className="max-w-full min-w-0">
-            <Grid board={board} rows="team" selected={selected} onSelect={setCell} />
-          </Panel>
-        </>
+        <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
+          <Grid board={board} selected={selected} onSelect={setCell} />
+        </Panel>
       ) : (
         <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
           <Empty>
@@ -168,85 +163,98 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
   )
 }
 
-/** Rows = one side (decision makers or teams), columns = slots. */
+/** Both board orientations in one table so they share the same slot columns. */
 function Grid({
   board,
-  rows,
   selected,
   onSelect,
 }: {
   board: BoardData
-  rows: Side
   selected: Cell | null
   onSelect: (c: Cell) => void
 }) {
   const { project, names, index, available } = board
-  const people: Participant[] = rows === 'dm' ? project.dms : project.teams
-  const partners: Participant[] = rows === 'dm' ? project.teams : project.dms
-  const partnerById = new Map(partners.map((p) => [p.id, p]))
-  const meetingAt = (slot: Id, id: Id) => (rows === 'dm' ? index.byCell.get(`${slot}|${id}`) : index.byTeamSlot.get(`${slot}|${id}`))
-  const partnerOf = (m: PlacedMeeting) => partnerById.get(rows === 'dm' ? m.team : m.dm)
+  const header = (rows: Side, divided = false) => (
+    <tr>
+      <th
+        className={`sticky top-0 left-0 z-30 h-6 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap ${
+          divided ? 'border-t-2 border-t-ink' : ''
+        }`}
+      >
+        {rows === 'dm' ? 'Decision makers' : 'Teams'}
+      </th>
+      {project.slots.map((slot) => (
+        <th
+          key={slot.id}
+          className={`sticky top-0 z-20 h-6 border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-mono font-semibold ${
+            divided ? 'border-t-2 border-t-ink' : ''
+          }`}
+        >
+          {slotLabel(project, slot.id)}
+        </th>
+      ))}
+    </tr>
+  )
+  const rowsFor = (rows: Side) => {
+    const people: Participant[] = rows === 'dm' ? project.dms : project.teams
+    const partners: Participant[] = rows === 'dm' ? project.teams : project.dms
+    const partnerById = new Map(partners.map((person) => [person.id, person]))
+    const meetingAt = (slot: Id, id: Id) => (rows === 'dm' ? index.byCell.get(`${slot}|${id}`) : index.byTeamSlot.get(`${slot}|${id}`))
+    const partnerOf = (meeting: PlacedMeeting) => partnerById.get(rows === 'dm' ? meeting.team : meeting.dm)
+    return people.map((person) => (
+      <tr key={person.id} className="h-6">
+        <th
+          scope="row"
+          className="sticky left-0 z-10 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap"
+        >
+          <Name person={person} display={names.get(person.id)} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
+        </th>
+        {project.slots.map((slot) => {
+          const meeting = meetingAt(slot.id, person.id)
+          const partner = meeting ? partnerOf(meeting) : undefined
+          const dmAsked = meeting ? asked(project.dmAsks, meeting.team, meeting.dm) : false
+          const teamAsked = meeting ? asked(project.teamAsks, meeting.team, meeting.dm) : false
+          const off = !available(person.id, slot.id)
+          // Only a loaded file can contain a repeat; the editor refuses to create one.
+          const repeat = meeting ? (index.byPair.get(pairKey(meeting.team, meeting.dm))?.length ?? 0) > 1 : false
+          const active = selected?.slot === slot.id && selected.anchor === person.id
+          const state = partner ? partner.name : off ? 'not available' : 'free'
+          return (
+            <td key={slot.id} className="border-r border-b border-rule/70 p-0">
+              <button
+                type="button"
+                aria-pressed={active}
+                aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
+                title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
+                onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
+                className={`relative flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left hover:outline hover:outline-ink ${
+                  active ? 'outline-2 outline-accent' : ''
+                } ${off && !partner ? 'hatched' : ''} ${partner ? '' : 'text-faint'} ${
+                  partner && !dmAsked && !teamAsked ? 'text-muted' : ''
+                }`}
+              >
+                {partner && <RequestMark dm={dmAsked} team={teamAsked} />}
+                {partner && <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" />}
+                {(repeat || (off && partner)) && (
+                  <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
+                    {repeat ? '×2' : '!'}
+                  </span>
+                )}
+              </button>
+            </td>
+          )
+        })}
+      </tr>
+    ))
+  }
   return (
     <div className="max-h-[75vh] overflow-auto">
       <table className="w-full border-separate border-spacing-0">
-        <thead>
-          <tr>
-            <th className="sticky top-0 left-0 z-30 h-6 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap">
-              {rows === 'dm' ? 'Decision makers' : 'Teams'}
-            </th>
-            {project.slots.map((slot) => (
-              <th key={slot.id} className="sticky top-0 z-20 h-6 border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-mono font-semibold">
-                {slotLabel(project, slot.id)}
-              </th>
-            ))}
-          </tr>
-        </thead>
+        <thead>{header('dm')}</thead>
+        <tbody>{rowsFor('dm')}</tbody>
         <tbody>
-          {people.map((person) => (
-            <tr key={person.id} className="h-6">
-              <th
-                scope="row"
-                className="sticky left-0 z-10 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap"
-              >
-                <Name person={person} display={names.get(person.id)} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
-              </th>
-              {project.slots.map((slot) => {
-                const m = meetingAt(slot.id, person.id)
-                const partner = m ? partnerOf(m) : undefined
-                const dmAsked = m ? asked(project.dmAsks, m.team, m.dm) : false
-                const teamAsked = m ? asked(project.teamAsks, m.team, m.dm) : false
-                const off = !available(person.id, slot.id)
-                // Only a loaded file can contain a repeat; the editor refuses to create one.
-                const repeat = m ? (index.byPair.get(pairKey(m.team, m.dm))?.length ?? 0) > 1 : false
-                const active = selected?.slot === slot.id && selected.anchor === person.id
-                const state = partner ? partner.name : off ? 'not available' : 'free'
-                return (
-                  <td key={slot.id} className="border-r border-b border-rule/70 p-0">
-                    <button
-                      type="button"
-                      aria-pressed={active}
-                      aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
-                      title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
-                      onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
-                      className={`relative flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left hover:outline hover:outline-ink ${
-                        active ? 'outline-2 outline-accent' : ''
-                      } ${off && !partner ? 'hatched' : ''} ${partner ? '' : 'text-faint'} ${
-                        partner && !dmAsked && !teamAsked ? 'text-muted' : ''
-                      }`}
-                    >
-                      {partner && <RequestMark dm={dmAsked} team={teamAsked} />}
-                      {partner && <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" />}
-                      {(repeat || (off && partner)) && (
-                        <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
-                          {repeat ? '×2' : '!'}
-                        </span>
-                      )}
-                    </button>
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
+          {header('team', true)}
+          {rowsFor('team')}
         </tbody>
       </table>
     </div>

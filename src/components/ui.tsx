@@ -93,5 +93,5 @@ export function Name({
 
 /** Country code shown as ordinary inline text before a name. */
 function Tag({ children }: { children: ReactNode }) {
-  return <span className="mr-1 shrink-0 opacity-70">{children}</span>
+  return <span className="font-mono-matched mr-1 shrink-0 opacity-70">{children}</span>
 }

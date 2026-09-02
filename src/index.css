@@ -66,6 +66,12 @@
   color: var(--color-muted);
 }
 
+/* Match the cap height of uppercase monospace tags to Public Sans. */
+@utility font-mono-matched {
+  font-family: var(--font-mono);
+  font-size-adjust: cap-height 0.73;
+}
+
 /* A cell the person cannot do: thin diagonal hatching. */
 @utility hatched {
   background-image: repeating-linear-gradient(135deg, transparent 0 4px, var(--color-rule) 4px 5px);
