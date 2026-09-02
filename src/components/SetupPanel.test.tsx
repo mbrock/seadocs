@@ -11,7 +11,7 @@ test('Setup uses separate request matrices with editable row names', () => {
   expect(html).toContain('aria-label="DM 1"')
   expect(html.match(/aria-label="team 1"/g)).toHaveLength(1)
   expect(html.match(/aria-label="DM 1"/g)).toHaveLength(1)
-  expect(html).toContain('-rotate-[22deg]')
+  expect(html).toContain('-rotate-45')
   expect(html).toContain('DM request: Fund X asks for Alpha')
   expect(html).toContain('Team request: Alpha asks for Fund X')
   expect(html).toContain('+ film team')
