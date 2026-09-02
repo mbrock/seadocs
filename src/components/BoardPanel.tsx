@@ -12,7 +12,6 @@ import {
   type AssignEffect,
   type Availability,
   type Id,
-  type Issue,
   type MeetingIndex,
   type Pair,
   type Participant,
@@ -20,13 +19,12 @@ import {
   type Side,
   type Stats,
 } from '../lib/scheduler'
-import { measure, requestedCounts, type Objectives, type ObjectiveKey } from '../lib/objectives'
 import { availabilityOfProject, participantName, slotLabel, withAvailability, withMeetings, type Project } from '../lib/project'
 import { boardCsv, download } from '../lib/csv'
 import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
+import { Button, Empty, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
 import { validateAdvancedBoard, type AdvancedSolverResult } from '../lib/advancedSolver'
@@ -137,7 +135,7 @@ export function BoardPanel({ project, onChange }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
+    <div className="flex flex-col gap-3">
       <Panel className="min-w-0">
         <PanelHeader title={hasBoard ? `Board · ${project.meetings.length} meetings` : 'Board'}>
           {hasBoard && <Key />}
@@ -204,13 +202,7 @@ export function BoardPanel({ project, onChange }: Props) {
         )}
       </Panel>
 
-      <aside
-        className={
-          selected
-            ? 'fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-auto rounded-t-[6px] border-t border-rule bg-paper shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:rounded-[4px] lg:border lg:shadow-none'
-            : 'lg:sticky lg:top-14'
-        }
-      >
+      <aside className={selected ? 'rounded-[4px] border border-rule bg-paper' : ''}>
         {selected ? (
           <Inspector
             project={project}
@@ -223,7 +215,7 @@ export function BoardPanel({ project, onChange }: Props) {
             onClose={() => setCell(null)}
           />
         ) : (
-          <Summary project={project} names={names} index={index} available={available} stats={stats} issues={issues} hasBoard={hasBoard} />
+          <NotScheduled project={project} names={names} index={index} available={available} stats={stats} hasBoard={hasBoard} />
         )}
       </aside>
     </div>
@@ -545,14 +537,13 @@ function CandidateList({
   )
 }
 
-/** Shown in the side panel when no cell is selected: how good the board is, what is missing. */
-function Summary({
+/** Requested meetings that did not fit, shown below the full-width board. */
+function NotScheduled({
   project,
   names,
   index,
   available,
   stats,
-  issues,
   hasBoard,
 }: {
   project: Project
@@ -560,25 +551,11 @@ function Summary({
   index: MeetingIndex
   available: Availability
   stats: Stats
-  issues: Issue[]
   hasBoard: boolean
 }) {
-  const objectives: Objectives = useMemo(() => measure(project, project.meetings), [project])
-  const requested = useMemo(() => requestedCounts(project), [project])
   if (!hasBoard) return null
   const name = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
-  const met = (key: ObjectiveKey) => `${(requested[key] ?? 0) - objectives[key]}/${requested[key] ?? 0}`
-
-  // Per decision maker: meetings they asked for vs got, worst share first.
-  const perDm = project.dms
-    .map((dm) => {
-      const wanted = project.teams.filter((t) => asked(project.dmAsks, t.id, dm.id)).length
-      const got = project.teams.filter((t) => asked(project.dmAsks, t.id, dm.id) && index.byPair.has(pairKey(t.id, dm.id))).length
-      return { dm, wanted, got, share: wanted ? got / wanted : 1 }
-    })
-    .filter((r) => r.wanted > 0)
-    .sort((a, b) => a.share - b.share || b.wanted - a.wanted)
 
   // Why a requested pair got no meeting: who is full, or where they could still fit.
   const load = new Map<Id, number>()
@@ -600,66 +577,27 @@ function Summary({
 
   return (
     <Panel>
-      <PanelHeader title="This board" />
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-3 py-3">
-        <Figure value={`${stats.meetings}/${stats.capacity}`} label="meetings possible" />
-        <Figure value={met('missedDm')} label="DM asks met" tone={objectives.missedDm > 0 ? 'warn' : 'ink'} />
-        <Figure value={met('missedTeam')} label="team asks met" />
-        <Figure value={objectives.dmGaps} label="DM windows" tone={objectives.dmGaps ? 'ink' : 'muted'} />
-        <Figure value={objectives.dmsUnderHalf} label="DMs under half" tone={objectives.dmsUnderHalf ? 'warn' : 'muted'} />
-        <Figure value={objectives.teamsEmpty} label="teams left out" tone={objectives.teamsEmpty ? 'warn' : 'muted'} />
-        {objectives.fillers > 0 && <Figure value={objectives.fillers} label="nobody asked" tone="muted" />}
-      </div>
-      {issues.length > 0 && (
-        <div className="border-t border-rule px-3 py-3">
-          <div className="eyebrow mb-1 text-warn">Problems · {issues.length}</div>
-          <ul className="text-[0.8rem]">
-            {issues.map((i, idx) => (
-              <li key={idx} className="py-0.5">
-                {i.type === 'duplicate' && `${name(i.dm)} meets ${name(i.team)} twice · ${i.slots.map(label).join(', ')}`}
-                {i.type === 'team-clash' && `${name(i.team)} is in two places at ${label(i.slot)}`}
-                {i.type === 'dm-clash' && `${name(i.dm)} is in two places at ${label(i.slot)}`}
-                {i.type === 'unavailable' && `${name(i.who)} is booked at ${label(i.slot)} but not available then`}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1 text-[0.75rem] text-muted">Click the cell to fix it. Export is off until the board is clean.</p>
-        </div>
-      )}
-      {perDm.length > 0 && (
-        <details className="border-t border-rule px-3 py-3" open={objectives.dmsUnderHalf > 0}>
-          <summary className="eyebrow cursor-pointer">Per decision maker · got / asked</summary>
-          <ul className="mt-1 max-h-[30vh] overflow-auto text-[0.8rem]">
-            {perDm.map((r) => (
-              <li key={r.dm.id} className="flex items-center justify-between gap-2 py-0.5">
-                <Name person={r.dm} display={names.get(r.dm.id)} className="flex min-w-0" />
-                <span className={`shrink-0 tabular-nums ${r.share < 0.5 ? 'font-semibold text-warn' : r.share < 1 ? '' : 'text-muted'}`}>
-                  {r.got}/{r.wanted}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      <div className="border-t border-rule px-3 py-3">
-        <div className="eyebrow mb-1">Not scheduled · {stats.unmet.length}</div>
+      <PanelHeader title={`Not scheduled · ${stats.unmet.length}`} />
+      <div className="px-3 py-3">
         {stats.unmet.length === 0 ? (
           <p className="text-[0.8rem] text-muted">Every request got a meeting.</p>
         ) : (
-          <ul className="max-h-[40vh] overflow-auto text-[0.8rem]">
+          <ul className="grid gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
             {stats.unmet.map((p) => (
-              <li key={pairKey(p.team, p.dm)} className="flex items-center justify-between gap-2 py-0.5" title={`rank ${rankOf(p)}`}>
-                <span className="min-w-0 truncate">
-                  {p.dmAsked ? (
-                    <>
-                      {name(p.dm)} <span className="text-muted">→</span> {name(p.team)}
-                    </>
-                  ) : (
-                    <>
-                      {name(p.team)} <span className="text-muted">→</span> {name(p.dm)}
-                    </>
-                  )}
-                  <span className="ml-1.5 text-[0.7rem] text-muted">{why(p)}</span>
+              <li key={pairKey(p.team, p.dm)} className="flex min-w-0 items-center justify-between gap-3 border-b border-rule py-2" title={`rank ${rankOf(p)}`}>
+                <span className="min-w-0 text-[0.82rem]">
+                  <span className="block truncate font-semibold">
+                    {p.dmAsked ? (
+                      <>
+                        {name(p.dm)} <span className="text-muted">→</span> {name(p.team)}
+                      </>
+                    ) : (
+                      <>
+                        {name(p.team)} <span className="text-muted">→</span> {name(p.dm)}
+                      </>
+                    )}
+                  </span>
+                  <span className="block truncate text-[0.72rem] text-muted">{why(p)}</span>
                 </span>
                 <AskPair dm={p.dmAsked} team={p.teamAsked} />
               </li>
