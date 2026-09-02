@@ -37,7 +37,7 @@ save / open / new, and shows a problem count when the board has one.
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
   (placed if there's room).
-- **Board** — the solver runs on the current input as you work; *Generate*
+- **Board** — the fast solver runs on the current input as you work; *Generate fast*
   puts its **recommended** board on screen: the one that misses the fewest
   decision-maker asks, then leaves the fewest decision makers with under half
   of what they asked for, then leaves the fewest teams out. The strip under the
@@ -69,7 +69,11 @@ save / open / new, and shows a problem count when the board has one.
   many meetings each decision maker got of those they asked for (worst first),
   and the requested meetings that did not fit, each with why (both full, DM
   full, team full, or the slot where both are still free). Export is disabled
-  while problems remain.
+  while problems remain. *Advanced · experimental* instead runs an integrated
+  pair-and-slot CP-SAT model locally in a Web Worker. It downloads the solver
+  only when clicked, keeps the current board visible while working, can be
+  cancelled, and never uploads roster or interest data. Its status distinguishes
+  a fully proven `OPTIMAL` result from a valid time-limited `FEASIBLE` incumbent.
 - **Schedules** — one running order per team or decision maker, headed with
   the event name and stamped with the print time, to print one at a time or
   all at once (one page each), or export everyone's as CSV. Decision makers
@@ -174,6 +178,36 @@ the edit cost or gained. Generation is deterministic: the same input gives the
 same boards, which is why there is no "generate again" — the frontier is
 recomputed whenever people, interest, slots or availability change. A
 26 × 26 × 12 day takes about a third of a second.
+
+### Experimental local CP-SAT solver
+
+The advanced button lazily loads the portable WebAssembly build of
+`cpsat-js@1.3.0` in an app-owned module Worker. The model decides whether each
+team × decision-maker pair meets **and** its slot together, so availability,
+one meeting per person per slot, and pair uniqueness are hard constraints
+rather than assumptions made before placement. The current fast recommendation
+is only a starting hint and fallback. Every returned board is checked again by
+ordinary TypeScript before it can replace the board on screen.
+
+Optimization uses clear sequential objectives rather than a hidden weighted
+score. Phase A maximizes mutual requests, then DM requests, teams receiving at
+least one meeting, and team requests. Each proven optimum or time-limited
+incumbent value becomes the next stage's constraint. Phase B rebuilds the full
+selectable pair × slot model with DM internal-gap variables, then minimizes DM
+gaps, retains useful extra meetings, and finally favors unchanged current-board
+cells. It does not freeze Phase A pair choices. Because the present project
+format has binary asks but no explicit filler consent or per-DM cap, advanced
+generation allows at most one meeting per DM that the DM did not request; this
+is the deliberately conservative burden guardrail for team-only and filler
+meetings.
+
+Current project files do not distinguish locks/pins from editable board cells,
+so manual cells are stability preferences, not hidden hard locks. If lock/pin
+fields are added later they must become explicit hard constraints and validator
+checks. The current fairness compromise is similarly intentional: v1 maximizes
+the number of teams served, but does not reproduce the fast scheduler's “DMs
+under half” threshold. The fast scheduler is a robust fallback, not a
+correctness oracle for the integrated model.
 
 ## Running it
 

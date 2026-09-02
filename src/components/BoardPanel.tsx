@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   assignCell,
   assignEffect,
@@ -29,6 +29,8 @@ import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
 import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
 import { askedBy } from '../lib/describe'
+import { startAdvancedSolve } from '../lib/advancedSolverClient'
+import { validateAdvancedBoard, type AdvancedSolverResult } from '../lib/advancedSolver'
 
 interface Props {
   project: Project
@@ -47,6 +49,10 @@ export function BoardPanel({ project, onChange }: Props) {
   const hasBoard = project.meetings.length > 0
   const [rows, setRows] = useState<Side>('dm')
   const [cell, setCell] = useState<Cell | null>(null)
+  const [advancedStatus, setAdvancedStatus] = useState<string | null>(null)
+  const [advancedRunning, setAdvancedRunning] = useState(false)
+  const cancelAdvanced = useRef<(() => void) | null>(null)
+  const advancedInputKey = useRef<string | null>(null)
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
   const names = useNames(project)
   const { teams, dms, dmAsks, teamAsks, slots } = project
@@ -74,6 +80,60 @@ export function BoardPanel({ project, onChange }: Props) {
 
   const setMeetings = (meetings: PlacedMeeting[]) => onChange((p) => withMeetings(p, meetings))
   const recommended = alternatives[0]?.meetings ?? []
+  const inputKey = JSON.stringify([teams, dms, dmAsks, teamAsks, slots, project.meetings])
+
+  useEffect(() => {
+    if (cancelAdvanced.current && advancedInputKey.current !== inputKey) {
+      cancelAdvanced.current?.()
+      cancelAdvanced.current = null
+      setAdvancedRunning(false)
+      setAdvancedStatus('Advanced solve cancelled because the scheduling input changed · board unchanged')
+    }
+  }, [inputKey])
+
+  useEffect(() => () => cancelAdvanced.current?.(), [])
+
+  const applyFallback = (reason: string) => {
+    if (recommended.length) setMeetings(recommended)
+    setAdvancedStatus(`Fast scheduler fallback — ${reason}`)
+    setAdvancedRunning(false)
+  }
+  const advancedResult = (result: AdvancedSolverResult) => {
+    cancelAdvanced.current = null
+    setAdvancedRunning(false)
+    if (!result.meetings || (result.kind !== 'optimal' && result.kind !== 'feasible')) {
+      applyFallback(result.message ?? 'the local CP-SAT solver returned no valid board')
+      return
+    }
+    const errors = validateAdvancedBoard({ teams, dms, dmAsks, teamAsks, slots }, result.meetings)
+    if (errors.length) {
+      applyFallback(`the local solver result was rejected (${errors[0]})`)
+      return
+    }
+    setMeetings(result.meetings)
+    const seconds = (result.runtimeMs / 1000).toFixed(1)
+    setAdvancedStatus(result.kind === 'optimal' ? `OPTIMAL · all objective stages proven · ${seconds}s` : `FEASIBLE · time-limited, some objective stages unproven · ${seconds}s`)
+  }
+  const runAdvanced = () => {
+    cancelAdvanced.current?.()
+    setAdvancedRunning(true)
+    setAdvancedStatus('Advanced local solver running… the current board will stay until a valid result is ready.')
+    advancedInputKey.current = inputKey
+    cancelAdvanced.current = startAdvancedSolve(
+      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint: recommended, maxTimeMs: 3000 },
+      advancedResult,
+      (message) => {
+        cancelAdvanced.current = null
+        applyFallback(message)
+      },
+    )
+  }
+  const stopAdvanced = () => {
+    cancelAdvanced.current?.()
+    cancelAdvanced.current = null
+    setAdvancedRunning(false)
+    setAdvancedStatus('Advanced solve cancelled · board unchanged')
+  }
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
@@ -97,7 +157,19 @@ export function BoardPanel({ project, onChange }: Props) {
           )}
           {!hasBoard && (
             <Button variant="primary" disabled={!hasPeople || recommended.length === 0} onClick={() => setMeetings(recommended)}>
-              Generate
+              Generate fast
+            </Button>
+          )}
+          {advancedRunning ? (
+            <Button onClick={stopAdvanced}>Cancel advanced</Button>
+          ) : (
+            <Button
+              variant={hasBoard ? 'default' : 'primary'}
+              disabled={!hasPeople || recommended.length === 0}
+              title="Experimental: optimize locally in a Web Worker with CP-SAT; no data is uploaded"
+              onClick={runAdvanced}
+            >
+              Advanced · experimental
             </Button>
           )}
           <Button
@@ -108,6 +180,11 @@ export function BoardPanel({ project, onChange }: Props) {
             CSV
           </Button>
         </PanelHeader>
+        {advancedStatus && (
+          <div role="status" className="border-b border-rule bg-accent-soft px-3 py-1.5 text-[0.8rem]">
+            {advancedStatus} · runs only in this browser; no data is uploaded
+          </div>
+        )}
         {hasBoard && <Frontier project={project} alternatives={alternatives} onPick={setMeetings} />}
         {hasBoard ? (
           <Grid project={project} names={names} index={index} available={available} rows={rows} selected={selected} onSelect={setCell} />
