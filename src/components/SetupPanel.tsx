@@ -116,7 +116,7 @@ function RequestMatrix({
   return (
     <section className="w-fit max-w-full min-w-0">
       <div className="overflow-auto pb-1">
-        <table className="mr-16 w-max border-separate border-spacing-0">
+        <table className="group/matrix mr-16 w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
               <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom whitespace-nowrap">
@@ -165,7 +165,7 @@ function RequestMatrix({
                         aria-label={description}
                         title={`${description} · ${requested ? fulfilled ? 'scheduled' : 'not scheduled' : 'not requested'}`}
                         onClick={() => onChange((current) => withAsk(current, kind, team, dm, !requested))}
-                        className="flex h-6 w-full cursor-pointer items-center justify-center hover:outline hover:outline-ink"
+                        className="flex h-6 w-full cursor-pointer items-center justify-center"
                       >
                         <RequestMark
                           dm={dmRequested}

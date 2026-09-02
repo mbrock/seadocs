@@ -17,6 +17,8 @@ test('Setup uses separate request matrices with editable row names', () => {
   expect(html).toContain('+ film team')
   expect(html).toContain('+ DM')
   expect(html.match(/<tr/g)).toHaveLength(4)
+  expect(html).not.toContain('bg-rule')
+  expect(html).toContain('group-hover/matrix:visible')
   expect(html).not.toContain('EVENT')
   expect(html).not.toContain('MEETING TIMES')
   expect(html).not.toContain('Load sample day')
