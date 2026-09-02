@@ -152,7 +152,9 @@ function RequestMatrix({
                   const team = kind === 'dm' ? column.id : person.id
                   const dm = kind === 'dm' ? person.id : column.id
                   const requested = asked(asks, team, dm)
-                  const fulfilled = requested && scheduled.has(pairKey(team, dm))
+                  const dmRequested = asked(project.dmAsks, team, dm)
+                  const teamRequested = asked(project.teamAsks, team, dm)
+                  const fulfilled = scheduled.has(pairKey(team, dm))
                   const description = `${kind === 'dm' ? 'DM' : 'Team'} request: ${person.name} asks for ${column.name}`
                   return (
                     <td key={column.id} className="p-0 group-hover:bg-canvas/50">
@@ -166,11 +168,10 @@ function RequestMatrix({
                         className="flex h-6 w-full cursor-pointer items-center justify-center hover:outline hover:outline-ink"
                       >
                         <RequestMark
-                          dm={kind === 'dm' && requested}
-                          team={kind === 'team' && requested}
+                          dm={dmRequested}
+                          team={teamRequested}
                           fulfilled={fulfilled}
                           showEmpty
-                          className={requested && !fulfilled ? 'opacity-45' : ''}
                         />
                       </button>
                     </td>

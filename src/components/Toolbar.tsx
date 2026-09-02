@@ -74,6 +74,12 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
         Redo
       </Button>
       <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
+      <Button variant="quiet" onClick={reset} disabled={isEmpty} title="Clear everything">
+        New
+      </Button>
+      <Button variant="quiet" onClick={() => fileInput.current?.click()} title="Open a project file">
+        Open
+      </Button>
       <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download the project as a file">
         Save
       </Button>
@@ -85,12 +91,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
       >
         Export
       </Button>
-      <Button variant="quiet" onClick={() => fileInput.current?.click()} title="Open a project file">
-        Open
-      </Button>
-      <Button variant="quiet" onClick={reset} disabled={isEmpty} title="Clear everything">
-        New
-      </Button>
+      <span className="mx-1 hidden h-4 w-px bg-rule sm:block" />
       <Button variant="quiet" onClick={loadSample} title="Replace the current project with the sample day">
         Sample
       </Button>

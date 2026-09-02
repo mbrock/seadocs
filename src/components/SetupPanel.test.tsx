@@ -29,7 +29,7 @@ test('Setup uses separate request matrices with editable row names', () => {
   expect(html).not.toContain('Random 26')
 })
 
-test('request color and fulfillment check reflect the current schedule', () => {
+test('request color and opacity reflect the current schedule', () => {
   let project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
   project = withAsk(project, 'dm', project.teams[0].id, project.dms[0].id, true)
   project = withMeetings(project, [{ team: project.teams[0].id, dm: project.dms[0].id, slot: project.slots[0].id }])
@@ -37,8 +37,20 @@ test('request color and fulfillment check reflect the current schedule', () => {
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
   expect(html).toContain('aria-checked="true"')
-  expect(html).toContain('bg-emerald-600')
-  expect(html).toContain('data-fulfillment-check="true"')
+  expect(html).toContain('bg-request-dm')
+  expect(html).not.toContain('opacity-45')
+  expect(html).not.toContain('<svg')
+})
+
+test('both matrices show the combined two-sided request state', () => {
+  let project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
+  project = withAsk(project, 'dm', project.teams[0].id, project.dms[0].id, true)
+  project = withAsk(project, 'team', project.teams[0].id, project.dms[0].id, true)
+
+  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
+
+  expect(html.match(/linear-gradient/g)).toHaveLength(2)
+  expect(html.match(/opacity-45/g)).toHaveLength(2)
 })
 
 test('film-team rows use board codes while retaining the full title', () => {
