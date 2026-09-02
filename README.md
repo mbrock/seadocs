@@ -32,6 +32,23 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 4. **Personal boards** — pick any team or decision maker to see their running
    order; print it, or export everyone's at once as CSV.
 
+## The sample day
+
+*Load sample day (BSD 2026)* in Setup fills in a realistic instance: the 13
+projects pitched on the first day of the 30th Baltic Sea Docs (Riga,
+10 September 2026), the 17 decision makers in the room, and nine 20-minute
+slots from 15:20 to 18:00. Names and countries are from the public programme;
+the interest grids are **invented** — authored in
+[`src/lib/sample.ts`](src/lib/sample.ts) from what each kind of decision maker
+plausibly wants (sales agents cast a wide net, broadcasters go for national and
+neighbouring projects, festivals want a little of everything, funds only their
+own country's co-productions).
+
+It shows the shape of a real day well: with 13 teams and 9 slots there are only
+117 seats, but the decision makers asked for 142 meetings, so the teams — not
+the decision makers — are the bottleneck, and around 25 requests cannot be met
+whatever the board. *Load random 26 × 26* is a larger synthetic stress test.
+
 ## How the schedule is built
 
 There is no single "best" board: a board that honours more decision-maker
@@ -127,6 +144,7 @@ src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's
 src/lib/objectives.ts      the objective vector, dominance, frontier merge
 src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
 src/lib/generate.ts        ties the frontier to a project snapshot (stale detection)
+src/lib/sample.ts          the BSD 2026 sample day (real names, invented interest)
 src/lib/state.ts           project model, stable participant ids, save/load, v1 import, demo data
 src/lib/csv.ts             CSV exports and file download
 src/lib/*.test.ts          Vitest suites

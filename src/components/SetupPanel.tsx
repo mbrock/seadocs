@@ -1,4 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
+import { sampleProject } from '../lib/sample'
 import { demoProject, parseLines, parseNames, withParticipants, withSlots, withTeamFloor, type Project } from '../lib/state'
 import { Button, Card, CardTitle, FieldLabel, Hint, Stamp } from './ui'
 import { inputClass, textareaClass } from './styles'
@@ -47,9 +48,14 @@ export function SetupPanel({ project, onChange }: Props) {
     setStamp(`Saved: ${next.teams.length} teams, ${next.dms.length} decision makers, ${next.slotCount} slots.`)
   }
 
+  function loadSample() {
+    onChange(sampleProject())
+    setStamp('Sample day loaded: 13 projects, 17 decision makers, 9 slots — see Interest and Schedule.')
+  }
+
   function loadDemo() {
     onChange(demoProject())
-    setStamp('Demo data loaded — see Interest and Schedule.')
+    setStamp('Random 26 × 26 stress-test data loaded — see Interest and Schedule.')
   }
 
   return (
@@ -138,7 +144,8 @@ export function SetupPanel({ project, onChange }: Props) {
         <Button variant="action" onClick={apply}>
           Save setup →
         </Button>
-        <Button onClick={loadDemo}>Load demo data (26 × 26)</Button>
+        <Button onClick={loadSample}>Load sample day (BSD 2026)</Button>
+        <Button onClick={loadDemo}>Load random 26 × 26</Button>
         {stamp && <Stamp>{stamp}</Stamp>}
       </Card>
     </>
