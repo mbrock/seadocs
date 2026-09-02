@@ -155,13 +155,17 @@ function RequestMatrix({
                         aria-label={description}
                         title={`${description} · ${requested ? fulfilled ? 'scheduled' : 'not scheduled' : 'not requested'}`}
                         onClick={() => onChange((current) => withAsk(current, kind, team, dm, !requested))}
-                        className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[2px] border text-[0.72rem] leading-none font-bold text-paper hover:outline hover:outline-ink ${
+                        className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[2px] border text-white hover:outline hover:outline-ink ${
                           requested
                             ? kind === 'dm' ? 'border-emerald-600 bg-emerald-600' : 'border-sea-3 bg-sea-3'
                             : 'border-rule bg-paper'
-                        }`}
+                        } ${requested && !fulfilled ? 'opacity-45' : ''}`}
                       >
-                        {fulfilled ? '✓' : ''}
+                        {fulfilled && (
+                          <svg data-fulfillment-check aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
+                            <path d="M3 8.5 6.5 12 13 4" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
                       </button>
                     </td>
                   )

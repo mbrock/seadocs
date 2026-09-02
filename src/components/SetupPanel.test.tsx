@@ -38,10 +38,11 @@ test('request color persists while fulfillment checks disappear during generatio
 
   expect(settled).toContain('aria-checked="true"')
   expect(settled).toContain('bg-emerald-600')
-  expect(settled).toContain('✓')
+  expect(settled).toContain('data-fulfillment-check="true"')
   expect(generating).toContain('aria-checked="true"')
   expect(generating).toContain('bg-emerald-600')
-  expect(generating).not.toContain('✓')
+  expect(generating).toContain('opacity-45')
+  expect(generating).not.toContain('data-fulfillment-check')
 })
 
 test('film-team rows use board codes while retaining the full title', () => {
