@@ -9,7 +9,7 @@
 //   v3  slots are entities with ids; meetings refer to slot ids
 
 import { MAX_SCORE, pairKey, type Participant, type PlacedMeeting, type Scores, type Slot } from './scheduler'
-import { cleanFloor, emptyProject, prune, type Project } from './project'
+import { emptyProject, prune, type Project } from './project'
 
 export const FORMAT_VERSION = 3
 export const STORAGE_KEY = 'meeting-board/project'
@@ -41,7 +41,6 @@ function fromV3(d: Record<string, unknown>): Project {
     dmScores: cleanScores(d.dmScores),
     teamScores: cleanScores(d.teamScores),
     meetings: Array.isArray(d.meetings) ? d.meetings.filter(isMeeting) : [],
-    teamFloor: cleanFloor(d.teamFloor),
     nextId: Number(d.nextId) || 1,
   })
 }
@@ -72,7 +71,6 @@ function fromV2(d: Record<string, unknown>): Project {
     dmScores: cleanScores(d.dmScores),
     teamScores: cleanScores(d.teamScores),
     meetings,
-    teamFloor: cleanFloor(d.teamFloor),
     nextId,
   })
 }
@@ -120,10 +118,11 @@ function isParticipant(p: unknown): p is Participant {
   return isRecord(p) && typeof p.id === 'string' && typeof p.name === 'string'
 }
 
-function cleanParticipant({ id, name, online, code }: Participant): Participant {
+function cleanParticipant({ id, name, online, code, unavailable }: Participant): Participant {
   const p: Participant = { id, name }
   if (online === true) p.online = true
   if (typeof code === 'string' && code.trim()) p.code = code.trim()
+  if (Array.isArray(unavailable) && unavailable.length) p.unavailable = unavailable.filter((s) => typeof s === 'string')
   return p
 }
 

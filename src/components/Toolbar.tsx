@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
-import { emptyProject, type Project } from '../lib/project'
+import { availabilityOfProject, emptyProject, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
 import { download } from '../lib/csv'
@@ -21,7 +21,7 @@ interface Props {
 export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState('')
-  const issues = useMemo(() => findIssues(project.meetings).length, [project.meetings])
+  const issues = useMemo(() => findIssues(project.meetings, availabilityOfProject(project)).length, [project])
   const isEmpty = project.teams.length === 0 && project.dms.length === 0
 
   function save() {

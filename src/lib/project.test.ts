@@ -43,7 +43,7 @@ test('slots keep their ids when the count changes; meetings in dropped slots go'
   expect(new Set(ids).size).toBe(10)
   p = { ...p, meetings: [{ team: p.teams[0].id, dm: p.dms[0].id, slot: ids[5] }] }
 
-  p = withSlots(p, 3, ['09:00'])
+  p = withSlots(p, ['09:00', '', ''])
   expect(p.slots.map((s) => s.id)).toEqual(ids.slice(0, 3))
   expect(p.meetings).toEqual([])
   expect(slotLabel(p, ids[0])).toBe('09:00')
@@ -54,8 +54,7 @@ test('slots keep their ids when the count changes; meetings in dropped slots go'
   expect(p.slots.slice(0, 3).map((s) => s.id)).toEqual(ids.slice(0, 3))
   expect(ids).not.toContain(p.slots[3].id)
 
-  expect(withSlots(p, 0, []).slots).toHaveLength(1)
-  expect(withSlots(p, 'abc', []).slots).toHaveLength(1)
+  expect(withSlots(p, []).slots).toHaveLength(1)
 })
 
 test('cycleScore wraps 0→1→2→3→0 and removes zero entries', () => {
@@ -92,7 +91,6 @@ test('deserialize reads v2 files (slotCount + slotLabels, meetings by slot posit
   const p = deserialize(JSON.stringify(v2))
   expect(p.slots.map((s) => s.label)).toEqual(['09:00', '09:20', ''])
   expect(p.meetings).toEqual([{ team: 't1', dm: 'd2', slot: p.slots[1].id }])
-  expect(p.teamFloor).toBe(2)
   expect(p.dmScores['t1|d2']).toBe(2)
   // Slot ids come from the same counter as everything else and don't collide.
   expect(new Set([...p.teams, ...p.dms, ...p.slots].map((x) => x.id)).size).toBe(5)

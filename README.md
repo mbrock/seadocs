@@ -16,17 +16,15 @@ The app has four views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
 save / open / new, and shows a problem count when the board has one.
 
-- **People** — paste the list of teams and the list of decision makers (one
+- **Setup** — paste the list of teams and the list of decision makers (one
   per line as `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
-  get a one-word code in capitals — "The Crust of Europe" → EUROPE, "Evening
-  School" → EVENING — the way a crew refers to films it knows by heart; write
-  `Title = CODE` or `Name = CODE` to choose the short form yourself; a
+  get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
+  Evening — the way a crew refers to films it knows by heart; write
+  `Title = Code` or `Name = Code` to choose the short form yourself; a
   trailing `*` marks someone who joins online), name the event (printed on
-  every running order), set the number of slots and optionally label them with
-  times, and a *minimum meetings per team* floor so no team goes home with an
-  empty day when there is room to avoid it. Example loaders fill in the BSD
-  2026 sample day or a random 26 × 26.
+  every running order), and list the slots, one line per slot — usually the
+  times. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
 - **Interest** — two grids, rows = decision makers, columns = teams, scored
   0–3 (not asked / interested / priority / must-meet). A 0 is not a refusal;
   it only means nobody asked. *Decision makers ask* is the primary signal;
@@ -39,29 +37,39 @@ save / open / new, and shows a problem count when the board has one.
   from one (names across the top and down the side, either way round, 0–3 or
   x in the cells, names matched loosely) and *CSV* exports the grid in the
   same shape.
-- **Board** — *Generate* builds several good boards and puts the
-  **recommended** one on screen: the one that misses the fewest must-meets,
-  then the fewest priorities, then the fewest interested asks. The strip under
-  the header says how good it is in plain words ("every must-meet, 55 of 58
-  priorities, 48 of 73 interested, 115 of 165 team asks · 3 DM windows");
-  *Compare* unfolds the other boards, each named by what it gains and what it
-  costs ("More team asks met · 1 more team ask met · costs 6 interested asks,
-  2 DM windows"), and one click puts any of them on screen. Rows are decision
-  makers (or teams), columns are slots; the key in the panel header explains
-  the cells: the rose tint is how much the decision maker asked (1 · 2 · 3),
-  the blue bar at a cell's right edge how much the team asked, and a white cell
-  with a name is a meeting nobody asked for. Click any cell to open it in the
-  side panel: who is there, and every counterpart that could be, strongest
-  request first, each marked with what picking it would do — *free*, *swap*
-  (the two meetings trade partners; the row shows who the other person gets and
-  that pair's scores) or *moves from …* (the candidate leaves someone else's
-  slot free). A pair meets at most once a day: candidates that would repeat a
-  meeting are shown greyed out with where they already meet, and cannot be
-  picked. When no cell is selected the side panel shows the board's figures
-  (met / asked per tier, windows), any *problems* (a repeat or double booking
-  in a loaded file — the editor cannot create one), and the requested meetings
-  that did not fit, each with why (both full, DM full, team full, or the slot
-  where both are still free). Export is disabled while problems remain.
+- **Board** — the solver runs on the current input as you work; *Generate*
+  puts its **recommended** board on screen: the one that misses the fewest
+  must-meets, then the fewest priorities, then the fewest interested asks, then
+  leaves the fewest decision makers with under half of what they asked for. The
+  strip under the header names the board on screen and says how good it is in
+  plain words ("every must-meet, 55 of 58 priorities, 48 of 73 interested, 109
+  of 165 team asks · 9 DM windows"); once you edit it becomes *Your board*, with
+  *Use recommended* to go back. *Compare* unfolds the other boards, each named
+  by what it gains and what it costs ("More team asks met · 1 more team ask
+  met · costs 6 interested asks, 2 DM windows"), and one click puts any of them
+  on screen. Rows are decision makers (or teams), columns are slots; the key in
+  the panel header explains the cells: the gold tint is how much the decision
+  maker asked (1 · 2 · 3), the blue bar at a cell's right edge how much the
+  team asked, a white cell with a name is a meeting nobody asked for, and a
+  hatched cell is a slot that person cannot do. Red is reserved for problems.
+  Click any cell to open it in the side panel: who is there (with *Remove*),
+  and every counterpart that could be booked, strongest request first, each
+  marked with what picking it would do — *free now*, *swap* (the two meetings
+  trade partners; the row shows who the other person gets and that pair's
+  scores) or *moves from …* (the candidate leaves someone else's slot free).
+  A pair meets at most once a day, and nobody is booked when they are away:
+  counterparts that would break either rule are not listed, only counted
+  ("Not listed: 4 already meet Kawakami today"). The same panel is where you
+  record that someone **can't do a slot** — "Kawakami can't do 15:20" blocks
+  the cell (and removes any meeting there); the solver's recommendation
+  updates around it. When no cell is selected the side panel shows the board's
+  figures (met / asked per tier, windows, DMs under half, teams left out), any
+  *problems* (a repeat, a double booking or a meeting at a blocked time, which
+  only a hand-written file can contain — the editor cannot create one), how
+  many meetings each decision maker got of those they asked for (worst first),
+  and the requested meetings that did not fit, each with why (both full, DM
+  full, team full, or the slot where both are still free). Export is disabled
+  while problems remain.
 - **Schedules** — one running order per team or decision maker, headed with
   the event name and stamped with the print time, to print one at a time or
   all at once (one page each), or export everyone's as CSV. Decision makers
@@ -72,7 +80,7 @@ Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
 
-*BSD 2026 sample day* in People fills in a realistic instance: the 13
+*BSD 2026 sample day* in Setup fills in a realistic instance: the 13
 projects pitched on the first day of the 30th Baltic Sea Docs (Riga,
 10 September 2026), the 17 decision makers in the room, and nine 20-minute
 slots from 15:20 to 18:00. Names and countries are from the public programme;
@@ -107,7 +115,8 @@ rank the table (see [`src/lib/objectives.ts`](src/lib/objectives.ts)):
 | must-meets | decision-maker must-meets (score 3) that got no meeting |
 | priorities | decision-maker priority asks (score 2) that got no meeting |
 | interested | decision-maker "interested" asks (score 1) that got no meeting |
-| teams short | teams with fewer meetings than the *minimum meetings per team* set in People |
+| DMs under half | decision makers who got fewer than half of the meetings they asked for |
+| teams left out | teams with no meeting at all |
 | DM windows | empty slots between a decision maker's first and last meeting, summed over all decision makers |
 | team asks | team asks (any score) that got no meeting |
 | fillers | meetings nobody asked for |
@@ -117,6 +126,11 @@ The three decision-maker tiers are separate objectives rather than one summed
 score because that is what the words mean to the people ticking the boxes: a
 must-meet is not worth three "interested"s, it is worth any number of them.
 The app shows missed counts as *met / asked*.
+
+"DMs under half" is the fairness objective: with more asks than seats the
+decision makers who asked for the most would otherwise soak up the room while
+someone who ticked six boxes gets one meeting. It ranks below the three tiers
+(it never costs a must-meet) and above team asks.
 
 "Windows" capture the request that a decision maker's day should not be one
 meeting at 9, one at 13 and one at 18: idle slots before the first or after the
@@ -131,20 +145,26 @@ Which meetings happen is decided several ways: the original greedy ranking
 (decision-maker score, then team score, then whoever has fewest meetings), with
 and without filling leftover capacity, and an **exact** maximum-weight selector
 ([`src/lib/flow.ts`](src/lib/flow.ts), min-cost flow) run under several
-weightings of decision-maker vs team interest, with and without enforcing the
-per-team minimum. The "tiered" weighting is strictly lexicographic in tiers
-(one must-meet outweighs every priority put together, one priority every
-"interested", and any decision-maker ask all team interest), so its board is
-the best possible on the first three objectives; that is the recommended
-board. Each selection respects one-meeting-per-slot capacity on both sides.
+weightings of decision-maker vs team interest, with and without a
+one-meeting-per-team floor. The "tiered" weightings are strictly
+lexicographic in tiers (one must-meet outweighs every priority put together,
+one priority every "interested", and any decision-maker ask all team
+interest), so their boards are the best possible on the first three
+objectives. Among boards equally good for the decision makers as a group the
+flow breaks ties by **fair share** — it prefers giving a meeting to the
+decision maker who has so far received the smallest fraction of what they
+asked for — and only then by team interest; that "fair" weighting usually
+produces the recommended board. Each selection respects one-meeting-per-slot
+capacity on both sides, counting only the slots each person can do.
 
 **2. Slot assignment** ([`src/lib/scheduler.ts`](src/lib/scheduler.ts)).
 Because the teams/decision-makers graph is bipartite, König's edge-colouring
 theorem guarantees any selection from step 1 fits into the slots with nobody
-double-booked. The implementation is alternating-path recolouring and never
-fails to place a chosen meeting. (The original prototype put each meeting in
-the earliest slot free for both sides, which can strand a meeting that would
-have fitted.)
+double-booked. The implementation is alternating-path recolouring, so with
+everyone available all day no chosen meeting is stranded. (The original
+prototype put each meeting in the earliest slot free for both sides, which
+can.) Blocked slots break the guarantee; the rare meeting that then cannot be
+placed is dropped and shows up under *Not scheduled*.
 
 **3. Compaction** ([`src/lib/compact.ts`](src/lib/compact.ts)). Slot
 assignment says nothing about *which* slots, so a further pass swaps pairs of
@@ -153,10 +173,12 @@ whenever that reduces windows, decision makers first, then teams. Which
 meetings happen never changes here, only when.
 
 Every board is then measured, dominated ones are dropped, and the frontier is
-sorted by the objective order above. The comparison also shows an *Edited by
-hand* row whenever the board differs from every generated one, so you can see
-what the edit cost or gained. Generation is deterministic: the same input
-gives the same boards. A 26 × 26 × 12 day takes about a tenth of a second.
+sorted by the objective order above. The comparison also shows a *Your board*
+row whenever the board differs from every generated one, so you can see what
+the edit cost or gained. Generation is deterministic: the same input gives the
+same boards, which is why there is no "generate again" — the frontier is
+recomputed whenever people, interest, slots or availability change. A
+26 × 26 × 12 day takes about a third of a second.
 
 ## Running it
 
@@ -186,21 +208,20 @@ src/index.css              Tailwind + Public Sans import and the colour/font the
 src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, ScorePair, score tints
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
-src/components/PeoplePanel.tsx   rosters, slots, team floor, example loaders
+src/components/SetupPanel.tsx    rosters, event name, slots, example loaders
 src/components/InterestPanel.tsx dense grid and one-person-at-a-time editor
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/components/Frontier.tsx      which board is on screen, and the folded-away comparison of alternatives
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
-src/lib/scheduler.ts       greedy selection, slot assignment (edge colouring), cell edits and their effects, stats, issues
+src/lib/scheduler.ts       participants and availability, greedy selection, slot assignment (edge colouring), cell edits and their effects, stats, issues
 src/lib/flow.ts            exact max-weight selection via min-cost flow
 src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's days
 src/lib/objectives.ts      the objective vector, dominance, frontier merge
 src/lib/describe.ts        boards in words: names by trade-off, one-line quality
 src/lib/import.ts          interest grids pasted from a spreadsheet
 src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
-src/lib/generate.ts        ties the frontier to a project snapshot (stale detection)
 src/lib/project.ts         project model: participants, slots, scores, meetings, with* update functions
 src/lib/persist.ts         project file format (v3) with v1/v2 migration, localStorage
 src/lib/sample.ts          the BSD 2026 sample day (real names, invented interest)
@@ -219,20 +240,20 @@ only call its functions and render the result.
   "version": 3,
   "title": "Baltic Sea Docs 2026 · One-to-one meetings, day 1",   // optional
   "teams": [{ "id": "t1", "name": "Team A", "code": "ALPHA" }],   // "code" only when set by hand
-  "dms":   [{ "id": "d2", "name": "Fund X", "online": true }],  // "online" only when true
+  "dms":   [{ "id": "d2", "name": "Fund X", "online": true, "unavailable": ["s4"] }],  // "online" only when true; "unavailable" = slot ids they cannot do
   "slots": [{ "id": "s3", "label": "09:00" }, { "id": "s4", "label": "" }],  // in order; "" shows as "Slot n"
   "dmScores":   { "t1|d2": 3 },           // 1..3; zero is simply absent
   "teamScores": { "t1|d2": 1 },
   "meetings":   [{ "team": "t1", "dm": "d2", "slot": "s3" }],
-  "teamFloor": 1,                         // minimum meetings per team
   "nextId": 5
 }
 ```
 
 Participants and slots have stable ids from one shared counter, so you can add,
-remove, or reorder names in People without the interest grid shifting under you,
+remove, or reorder names in Setup without the interest grid shifting under you,
 and change the slot count without meetings jumping to different times. Older
 files are converted on open: v1 (the original single-file prototype, everything
 by list position) and v2 (`slotCount` + `slotLabels`, meetings by slot
 position). A v2 `fillGaps` flag is ignored (filling gaps is now one of the
-alternatives rather than a switch).
+alternatives rather than a switch), as is a v3 `teamFloor` (every board now
+tries to leave no team out).

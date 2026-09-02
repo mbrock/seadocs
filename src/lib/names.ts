@@ -139,11 +139,13 @@ const TITLE_GENERIC = new Set(
   ).split(/\s+/),
 )
 
+const capitalise = (w: string) => (w ? w[0].toUpperCase() + w.slice(1) : w)
+
 /**
- * One capitalised word that stands for a title. Takes the first alternative
+ * One word that stands for a title, in title case. Takes the first alternative
  * of a slashed title, drops numbers, units, stopwords and possessives, then
  * the generic nouns if anything else remains, and returns the last word left —
- * English titles usually end on their head noun ("Cords of Bliss" → BLISS).
+ * English titles usually end on their head noun ("Cords of Bliss" → Bliss).
  * Returns '' when nothing usable remains; callers fall back to the title.
  */
 export function titleWord(title: string): string {
@@ -154,32 +156,32 @@ export function titleWord(title: string): string {
     .filter((w) => w.length > 2 && !/\p{N}/u.test(w) && !/['’]s$/i.test(w) && !TITLE_STOPWORDS.has(w.toLowerCase()))
   const specific = words.filter((w) => !TITLE_GENERIC.has(w.toLowerCase()))
   const pool = specific.length ? specific : words
-  return pool.length ? pool[pool.length - 1].toUpperCase() : ''
+  return pool.length ? capitalise(pool[pool.length - 1]) : ''
 }
 
 /**
  * Title words for a whole set, made unique: when two titles land on the same
- * word, each gets a second word prefixed ("CRUST EUROPE") or, failing that,
- * the full title in capitals.
+ * word, each gets a second word prefixed ("Crust Europe") or, failing that,
+ * the full title.
  */
 export function titleWords(titles: string[]): string[] {
-  const codes = titles.map((t) => titleWord(t) || t.toUpperCase())
+  const codes = titles.map((t) => titleWord(t) || t)
   const counts = new Map<string, number>()
   for (const c of codes) counts.set(c, (counts.get(c) ?? 0) + 1)
   return codes.map((code, i) => {
     if ((counts.get(code) ?? 0) < 2) return code
     const words = titles[i]
       .split(/[\s/–—-]+/)
-      .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').toUpperCase())
+      .map((w) => capitalise(w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')))
       .filter((w) => w.length > 2 && w !== code && !TITLE_STOPWORDS.has(w.toLowerCase()))
-    return words.length ? `${words[0]} ${code}` : titles[i].toUpperCase()
+    return words.length ? `${words[0]} ${code}` : titles[i]
   })
 }
 
 export interface DisplayName {
   /** Initial + surname for people with an affiliation; the full name otherwise. */
   short: string
-  /** The densest form: a title word for teams ("EUROPE"), the bare surname for people ("Cornejo") when it is unique. */
+  /** The densest form: a title word for teams ("Europe"), the bare surname for people ("Cornejo") when it is unique. */
   code: string
   /** Country code, or '' when the name carries no country. */
   tag: string

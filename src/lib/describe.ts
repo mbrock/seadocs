@@ -7,7 +7,8 @@ const UNIT: Record<ObjectiveKey, [string, string]> = {
   missedMust: ['must-meet', 'must-meets'],
   missedPriority: ['priority', 'priorities'],
   missedInterested: ['interested ask', 'interested asks'],
-  teamsShort: ['team short', 'teams short'],
+  dmsUnderHalf: ['DM under half', 'DMs under half'],
+  teamsEmpty: ['team left out', 'teams left out'],
   dmGaps: ['DM window', 'DM windows'],
   missedTeam: ['team ask', 'team asks'],
   fillers: ['filler', 'fillers'],
@@ -52,7 +53,7 @@ export function describe(o: Objectives, requested: Partial<Record<ObjectiveKey, 
   if (requested.missedTeam) parts.push(`${requested.missedTeam - o.missedTeam} of ${requested.missedTeam} team asks`)
   const tail: string[] = []
   if (o.dmGaps) tail.push(plural(o.dmGaps, 'dmGaps'))
-  if (o.teamsShort) tail.push(plural(o.teamsShort, 'teamsShort'))
+  if (o.teamsEmpty) tail.push(plural(o.teamsEmpty, 'teamsEmpty'))
   if (o.fillers) tail.push(plural(o.fillers, 'fillers'))
   return [parts.join(', '), tail.join(', ')].filter(Boolean).join(' · ')
 }

@@ -4,7 +4,6 @@ import { describe, isAsk, nameAlternatives, type AlternativeName } from '../lib/
 import type { Alternative } from '../lib/optimize'
 import type { PlacedMeeting } from '../lib/scheduler'
 import type { Project } from '../lib/project'
-import type { Generated } from '../lib/generate'
 import { Button } from './ui'
 
 const meetingsKey = (ms: PlacedMeeting[]) =>
@@ -15,8 +14,8 @@ const meetingsKey = (ms: PlacedMeeting[]) =>
 
 interface Props {
   project: Project
-  generated: Generated | null
-  fresh: boolean
+  /** The frontier for the current input; empty when there is nobody to schedule. */
+  alternatives: Alternative[]
   onPick: (meetings: PlacedMeeting[]) => void
 }
 
@@ -26,23 +25,19 @@ interface Props {
  * a genuinely different trade — nothing on the list beats anything else on
  * every count — named by what it gains and what it costs.
  */
-export function Frontier({ project, generated, fresh, onPick }: Props) {
+export function Frontier({ project, alternatives, onPick }: Props) {
   const [open, setOpen] = useState(false)
   const requested = useMemo(() => requestedCounts(project), [project])
   const current = useMemo(() => measure(project, project.meetings), [project])
 
-  if (!fresh || !generated) {
+  if (alternatives.length === 0) {
     return (
       <Strip>
-        <span className="text-muted">
-          {generated ? 'People, interest or slots changed since this board was generated — Generate again to compare boards.' : 'Loaded from the saved project.'}{' '}
-          <span className="text-ink">{describe(current, requested)}</span>
-        </span>
+        <span className="text-muted">{describe(current, requested)}</span>
       </Strip>
     )
   }
 
-  const alternatives = generated.alternatives
   const currentKey = meetingsKey(project.meetings)
   const selected = alternatives.findIndex((a) => meetingsKey(a.meetings) === currentKey)
   const names = nameAlternatives(alternatives)
@@ -53,15 +48,22 @@ export function Frontier({ project, generated, fresh, onPick }: Props) {
     <>
       <Strip>
         <span className="min-w-0">
-          <b>{edited ? 'Edited by hand' : names[selected].name}</b>
+          <b>{edited ? 'Your board' : names[selected].name}</b>
           <span className="text-muted"> — {describe(current, requested)}</span>
           {!edited && selected > 0 && names[selected].cost && <span className="text-muted"> · {names[selected].cost}</span>}
         </span>
-        {(others > 0 || edited) && (
-          <Button variant="quiet" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-            {open ? 'Hide' : others > 0 ? `Compare ${others} other ${others === 1 ? 'board' : 'boards'}` : 'Compare with generated'} {open ? '▴' : '▾'}
-          </Button>
-        )}
+        <span className="flex items-center gap-1">
+          {edited && (
+            <Button variant="quiet" onClick={() => onPick(alternatives[0].meetings)} title="Replace this board with the one the solver recommends for the current input">
+              Use recommended
+            </Button>
+          )}
+          {(others > 0 || edited) && (
+            <Button variant="quiet" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+              {open ? 'Hide' : others > 0 ? `Compare ${others} other ${others === 1 ? 'board' : 'boards'}` : 'Compare with recommended'} {open ? '▴' : '▾'}
+            </Button>
+          )}
+        </span>
       </Strip>
       {open && <Table alternatives={alternatives} names={names} selected={selected} current={edited ? current : null} requested={requested} onPick={onPick} />}
     </>
@@ -141,7 +143,7 @@ function Table({
           {current && (
             <tr className={row(true)}>
               <td className="px-2 py-1.5 text-[0.85rem] font-semibold whitespace-nowrap">
-                Edited by hand
+                Your board
                 <span className="ml-2 text-[0.7rem] font-semibold tracking-[0.06em] text-accent uppercase">on screen</span>
                 {alternatives.some((a) => sameObjectives(a.objectives, current)) && (
                   <span className="ml-2 text-[0.7rem] font-normal text-muted">same counts as a generated board</span>

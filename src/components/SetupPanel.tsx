@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { sampleProject } from '../lib/sample'
 import { demoProject } from '../lib/fixtures'
-import { parseLines, parseRoster, rosterText, withParticipants, withSlots, withTeamFloor, withTitle, type Project } from '../lib/project'
+import { parseLines, parseRoster, rosterText, slotLabel, withParticipants, withSlots, withTitle, type Project } from '../lib/project'
 import { Button, Label, Panel, PanelHeader, inputClass, textareaClass } from './ui'
 
 interface Props {
@@ -13,9 +13,8 @@ interface Drafts {
   title: string
   teamsText: string
   dmsText: string
-  slotCount: string
-  labelsText: string
-  teamFloor: string
+  /** One slot per line; the line is the slot's label. */
+  slotsText: string
 }
 
 function draftsFrom(project: Project): Drafts {
@@ -23,15 +22,14 @@ function draftsFrom(project: Project): Drafts {
     title: project.title,
     teamsText: rosterText(project.teams),
     dmsText: rosterText(project.dms),
-    slotCount: String(project.slots.length),
-    labelsText: project.slots.map((s) => s.label).join('\n'),
-    teamFloor: String(project.teamFloor),
+    slotsText: project.slots.map((s) => slotLabel(project, s.id)).join('\n'),
   }
 }
 
 const same = (a: Drafts, b: Drafts) => (Object.keys(a) as (keyof Drafts)[]).every((k) => a[k] === b[k])
 
-export function PeoplePanel({ project, onChange }: Props) {
+/** Who is coming and when: the rosters, the slot times, the event title. */
+export function SetupPanel({ project, onChange }: Props) {
   // Drafts live here until "Apply". Whenever a new project arrives (apply,
   // open file, sample, undo) the drafts are reset to match it.
   const [drafts, setDrafts] = useState(() => draftsFrom(project))
@@ -44,11 +42,15 @@ export function PeoplePanel({ project, onChange }: Props) {
   const dirty = !same(drafts, draftsFrom(project))
   const teamCount = parseRoster(drafts.teamsText).length
   const dmCount = parseRoster(drafts.dmsText).length
+  const slotCount = parseLines(drafts.slotsText).length
 
   function apply() {
     let next = withParticipants(project, parseRoster(drafts.teamsText), parseRoster(drafts.dmsText))
-    next = withSlots(next, drafts.slotCount, parseLines(drafts.labelsText))
-    next = withTeamFloor(next, drafts.teamFloor)
+    // A line that is just the default label ("Slot 3" on line 3) is stored as no label.
+    next = withSlots(
+      next,
+      parseLines(drafts.slotsText).map((label, i) => (label === `Slot ${i + 1}` ? '' : label)),
+    )
     next = withTitle(next, drafts.title)
     onChange(next)
   }
@@ -67,7 +69,7 @@ export function PeoplePanel({ project, onChange }: Props) {
             onChange={(e) => edit({ teamsText: e.target.value })}
           />
           <p className="mt-2 text-[0.8rem] text-muted">
-            One title per line. The board shows a one-word code picked from the title; write <b>Title = CODE</b> to choose it yourself.
+            One title per line. The board shows a one-word code picked from the title; write <b>Title = Code</b> to choose it yourself.
           </p>
         </div>
       </Panel>
@@ -84,7 +86,8 @@ export function PeoplePanel({ project, onChange }: Props) {
             onChange={(e) => edit({ dmsText: e.target.value })}
           />
           <p className="mt-2 text-[0.8rem] text-muted">
-            One per line as <b>Name | Organisation, Country</b> — the country becomes a tag and long names are shortened on the board. A trailing <b>*</b> marks someone joining online. <b>Name = CODE</b> sets the short form.
+            One per line as <b>Name | Organisation, Country</b> — the country becomes a tag and long names are shortened on the board. A trailing <b>*</b> marks
+            someone joining online. <b>Name = Code</b> sets the short form.
           </p>
         </div>
       </Panel>
@@ -106,39 +109,15 @@ export function PeoplePanel({ project, onChange }: Props) {
               <p className="mt-1 text-[0.8rem] text-muted">Printed at the top of every running order.</p>
             </div>
             <div>
-              <Label htmlFor="slotCount">Number of slots</Label>
-              <input
-                id="slotCount"
-                type="number"
-                min={1}
-                max={60}
-                className={`${inputClass} w-24`}
-                value={drafts.slotCount}
-                onChange={(e) => edit({ slotCount: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="slotLabels">Times, one per line</Label>
+              <Label htmlFor="slotLabels">Slots · {slotCount}</Label>
               <textarea
                 id="slotLabels"
-                className={`${textareaClass} min-h-[7rem]`}
+                className={`${textareaClass} min-h-[12rem]`}
                 placeholder={'15:20\n15:40\n…'}
-                value={drafts.labelsText}
-                onChange={(e) => edit({ labelsText: e.target.value })}
+                value={drafts.slotsText}
+                onChange={(e) => edit({ slotsText: e.target.value })}
               />
-            </div>
-            <div>
-              <Label htmlFor="teamFloor">Minimum meetings per team</Label>
-              <input
-                id="teamFloor"
-                type="number"
-                min={0}
-                max={60}
-                className={`${inputClass} w-24`}
-                value={drafts.teamFloor}
-                onChange={(e) => edit({ teamFloor: e.target.value })}
-              />
-              <p className="mt-1 text-[0.8rem] text-muted">A goal the boards are scored on, not a rule.</p>
+              <p className="mt-1 text-[0.8rem] text-muted">One line per meeting slot, in order. Someone who cannot make a slot is marked on the board.</p>
             </div>
           </div>
         </Panel>

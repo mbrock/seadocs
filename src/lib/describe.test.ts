@@ -2,7 +2,7 @@ import { describe as suite, expect, test } from 'vitest'
 import { describe, nameAlternatives } from './describe'
 import type { Objectives } from './objectives'
 
-const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, teamsShort: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
 const alt = (o: Partial<Objectives>) => ({ objectives: { ...zero, ...o }, meetings: [], recipe: 'test' })
 
 suite('nameAlternatives', () => {

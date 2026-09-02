@@ -97,9 +97,9 @@ export function Empty({ children }: { children: ReactNode }) {
 export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 text-[0.85rem] focus:border-ink focus:outline-none'
 export const textareaClass = `${inputClass} w-full resize-y leading-[1.5]`
 
-/** Interest score 0..3 as background + text classes; rose for decision makers, sea for teams. */
+/** Interest score 0..3 as background + text classes; gold for decision makers, sea for teams. */
 export const scoreTint = {
-  dm: ['', 'bg-rose-1 text-ink', 'bg-rose-2 text-ink', 'bg-rose-3 text-paper'],
+  dm: ['', 'bg-gold-1 text-ink', 'bg-gold-2 text-ink', 'bg-gold-3 text-paper'],
   team: ['', 'bg-sea-1 text-ink', 'bg-sea-2 text-ink', 'bg-sea-3 text-paper'],
 } as const
 
@@ -118,7 +118,7 @@ export function ScorePair({ dm, team }: { dm: number; team: number }) {
  * A participant's name that truncates without losing its marks. With `display`
  * (from `displayNames`) it renders the short form plus the country tag:
  * "J. Cornejo ES". The `code` variant is for board cells: the title word for a
- * team ("EUROPE", set small and tracked), the surname for a person.
+ * team ("Europe"), the surname for a person.
  */
 export function Name({
   person,
@@ -135,11 +135,10 @@ export function Name({
   variant?: 'short' | 'code'
 }) {
   const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
-  const isCode = variant === 'code' && display !== undefined && display.code !== display.short && !display.tag
   const clip = lines === 2 ? 'line-clamp-2 leading-[1.2] [overflow-wrap:anywhere]' : 'truncate'
   return (
     <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
-      <span className={`${clip} ${isCode ? 'text-[0.72rem] font-semibold tracking-[0.05em]' : ''}`}>{text}</span>
+      <span className={clip}>{text}</span>
       {display?.tag && <Tag>{display.tag}</Tag>}
       <OnlineMark show={person.online} />
     </span>

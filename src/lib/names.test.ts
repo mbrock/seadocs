@@ -50,7 +50,7 @@ describe('displayNames', () => {
       { id: 't1', name: '14,5 km Away From Our Dreams' },
     ])
     expect(names.get('d1')).toEqual({ short: 'R. Heiler', code: 'Heiler', tag: 'DE', affiliation: 'goEast, Germany' })
-    expect(names.get('t1')).toEqual({ short: '14,5 km Away From Our Dreams', code: 'DREAMS', tag: '', affiliation: '' })
+    expect(names.get('t1')).toEqual({ short: '14,5 km Away From Our Dreams', code: 'Dreams', tag: '', affiliation: '' })
   })
   it('falls back to full names when abbreviations collide', () => {
     const names = displayNames([
@@ -67,24 +67,24 @@ describe('displayNames', () => {
 describe('titleWord', () => {
   it('picks the word a crew would use for each BSD 2026 title', () => {
     const expected: [string, string][] = [
-      ['14,5 km Away From Our Dreams', 'DREAMS'],
-      ['35 Letters', 'LETTERS'],
-      ['Borderline', 'BORDERLINE'],
-      ['Concrete Grassland', 'GRASSLAND'],
-      ['Cords of Bliss', 'BLISS'],
-      ['The Crust of Europe', 'EUROPE'],
-      ['Encounters/Departures', 'ENCOUNTERS'],
-      ['Evening School', 'EVENING'],
-      ['Going Underground', 'UNDERGROUND'],
-      ['Keepers of the City', 'KEEPERS'],
-      ['Lunatics', 'LUNATICS'],
-      ['Mariana’s Lament', 'LAMENT'],
-      ['Master of Ceremonies', 'CEREMONIES'],
+      ['14,5 km Away From Our Dreams', 'Dreams'],
+      ['35 Letters', 'Letters'],
+      ['Borderline', 'Borderline'],
+      ['Concrete Grassland', 'Grassland'],
+      ['Cords of Bliss', 'Bliss'],
+      ['The Crust of Europe', 'Europe'],
+      ['Encounters/Departures', 'Encounters'],
+      ['Evening School', 'Evening'],
+      ['Going Underground', 'Underground'],
+      ['Keepers of the City', 'Keepers'],
+      ['Lunatics', 'Lunatics'],
+      ['Mariana’s Lament', 'Lament'],
+      ['Master of Ceremonies', 'Ceremonies'],
     ]
     for (const [title, word] of expected) expect(titleWord(title), title).toBe(word)
   })
   it('falls back to generic words when nothing else is left, and to nothing when no words qualify', () => {
-    expect(titleWord('The City')).toBe('CITY')
+    expect(titleWord('The City')).toBe('City')
     expect(titleWord('1984')).toBe('')
     expect(titleWord('Us')).toBe('')
   })
@@ -92,9 +92,9 @@ describe('titleWord', () => {
 
 describe('titleWords', () => {
   it('disambiguates titles that share a word', () => {
-    expect(titleWords(['The Crust of Europe', 'Little Europe', 'Cords of Bliss'])).toEqual(['CRUST EUROPE', 'LITTLE EUROPE', 'BLISS'])
+    expect(titleWords(['The Crust of Europe', 'Little Europe', 'Cords of Bliss'])).toEqual(['Crust Europe', 'Little Europe', 'Bliss'])
   })
   it('uses the whole title when no word qualifies', () => {
-    expect(titleWords(['1984', 'Us'])).toEqual(['1984', 'US'])
+    expect(titleWords(['1984', 'Us'])).toEqual(['1984', 'Us'])
   })
 })

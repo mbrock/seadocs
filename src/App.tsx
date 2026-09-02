@@ -2,15 +2,14 @@ import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } 
 import { emptyProject, type Project } from './lib/project'
 import { loadLocal, saveLocal } from './lib/persist'
 import { commit, initialHistory, redo, undo } from './lib/history'
-import type { Generated } from './lib/generate'
 import { Toolbar } from './components/Toolbar'
-import { PeoplePanel } from './components/PeoplePanel'
+import { SetupPanel } from './components/SetupPanel'
 import { InterestPanel } from './components/InterestPanel'
 import { BoardPanel } from './components/BoardPanel'
 import { SchedulesPanel } from './components/SchedulesPanel'
 
 const VIEWS = [
-  ['people', 'People'],
+  ['setup', 'Setup'],
   ['interest', 'Interest'],
   ['board', 'Board'],
   ['schedules', 'Schedules'],
@@ -41,9 +40,7 @@ export default function App() {
     (action) => setHistory((h) => commit(h, typeof action === 'function' ? action(h.present) : action)),
     [],
   )
-  const [view, setView] = useView(project.meetings.length ? 'board' : 'people')
-  // The last generated frontier. Not persisted: generating is deterministic and quick.
-  const [generated, setGenerated] = useState<Generated | null>(null)
+  const [view, setView] = useView(project.meetings.length ? 'board' : 'setup')
 
   useEffect(() => saveLocal(project), [project])
 
@@ -96,9 +93,9 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        {view === 'people' && <PeoplePanel project={project} onChange={setProject} />}
+        {view === 'setup' && <SetupPanel project={project} onChange={setProject} />}
         {view === 'interest' && <InterestPanel project={project} onChange={setProject} />}
-        {view === 'board' && <BoardPanel project={project} onChange={setProject} generated={generated} onGenerated={setGenerated} />}
+        {view === 'board' && <BoardPanel project={project} onChange={setProject} />}
         {view === 'schedules' && <SchedulesPanel project={project} />}
       </main>
 

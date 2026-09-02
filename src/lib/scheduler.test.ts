@@ -2,6 +2,9 @@ import { test, expect } from 'vitest'
 import {
   selectMeetings,
   assignSlots,
+  assignCell,
+  assignEffect,
+  availabilityOf,
   buildSchedule,
   reassign,
   findIssues,
@@ -75,7 +78,7 @@ test('assignSlots: places every meeting without double booking (random graphs)',
     const D = 1 + Math.floor(rand() * 12)
     const S = 1 + Math.floor(rand() * 8)
     const names = (n: number, prefix: string) => ids(n, prefix).map((x) => x.name)
-    const p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), S, []), rand)
+    const p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
     const chosen = selectMeetings({ ...p, fillGaps: rand() > 0.5 })
     const placed = assignSlots(chosen, p.slots)
     expect(placed).toHaveLength(chosen.length)
@@ -102,8 +105,49 @@ test('assignSlots: handles a 6-cycle that defeats greedy earliest-slot placement
   expectValidPlacement(placed, slots)
 })
 
-test('assignSlots: throws when someone exceeds the cap', () => {
-  expect(() => assignSlots([{ team: 't1', dm: 'd1' }, { team: 't1', dm: 'd2' }], numberedSlots(1))).toThrow(/Team t1/)
+test('assignSlots: leaves out what cannot be placed', () => {
+  expect(assignSlots([{ team: 't1', dm: 'd1' }, { team: 't1', dm: 'd2' }], numberedSlots(1))).toHaveLength(1)
+})
+
+test('assignSlots: respects availability, routing chains around blocked slots', () => {
+  const rand = seededRandom(7)
+  let dropped = 0
+  let total = 0
+  for (let trial = 0; trial < 200; trial++) {
+    const T = 2 + Math.floor(rand() * 10)
+    const D = 2 + Math.floor(rand() * 10)
+    const S = 2 + Math.floor(rand() * 7)
+    const names = (n: number, prefix: string) => ids(n, prefix).map((x) => x.name)
+    let p = randomScores(withSlots(withParticipants(emptyProject(), names(T, 'Team '), names(D, 'DM ')), Array(S).fill('')), rand)
+    // Block a few random (person, slot) cells.
+    const block = (people: Participant[]) =>
+      people.map((x) => {
+        const unavailable = p.slots.filter(() => rand() < 0.15).map((s) => s.id)
+        return unavailable.length ? { ...x, unavailable } : x
+      })
+    p = { ...p, teams: block(p.teams), dms: block(p.dms) }
+    const available = availabilityOf([...p.teams, ...p.dms])
+    const chosen = selectMeetings({ ...p, fillGaps: rand() > 0.5 })
+    const placed = assignSlots(chosen, p.slots, available)
+    expectValidPlacement(placed, p.slots)
+    expect(findIssues(placed, available)).toEqual([])
+    total += chosen.length
+    dropped += chosen.length - placed.length
+  }
+  // Selection respects per-person caps, so almost everything still fits.
+  expect(dropped / total).toBeLessThan(0.03)
+})
+
+test('assignCell refuses to put someone into a slot they cannot do', () => {
+  const slots = numberedSlots(2)
+  const available = availabilityOf([{ id: 'd1', name: 'D1', unavailable: [slots[1].id] }])
+  const before: PlacedMeeting[] = []
+  expect(assignEffect(before, slots[1].id, 'dm', 'd1', 't1', available)).toEqual({ kind: 'unavailable', who: 'd1' })
+  expect(assignEffect(before, slots[1].id, 'team', 't1', 'd1', available)).toEqual({ kind: 'unavailable', who: 'd1' })
+  expect(assignCell(before, slots[1].id, 'dm', 'd1', 't1', available)).toBe(before)
+  expect(assignCell(before, slots[0].id, 'dm', 'd1', 't1', available)).toHaveLength(1)
+  const bad: PlacedMeeting[] = [{ team: 't1', dm: 'd1', slot: slots[1].id }]
+  expect(findIssues(bad, available)).toEqual([{ type: 'unavailable', team: 't1', dm: 'd1', slot: slots[1].id, who: 'd1' }])
 })
 
 test('buildSchedule on the demo: every chosen meeting is placed', () => {

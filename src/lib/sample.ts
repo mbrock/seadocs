@@ -109,7 +109,7 @@ function parseRows(rows: string[], width: number, key: (row: number, col: number
 
 export function sampleProject(): Project {
   let p = withParticipants(withTitle(emptyProject(), 'Baltic Sea Docs 2026 · One-to-one meetings, day 1 · Thursday 10 September'), TEAMS, parseRoster(DMS.join('\n')))
-  p = withSlots(p, SLOTS.length, SLOTS)
+  p = withSlots(p, SLOTS)
   const dmScores = parseRows(DM_ROWS, TEAMS.length, (d, t) => pairKey(p.teams[t].id, p.dms[d].id))
   const teamScores = parseRows(TEAM_ROWS, DMS.length, (t, d) => pairKey(p.teams[t].id, p.dms[d].id))
   return withScores(p, dmScores, teamScores)

@@ -7,7 +7,7 @@ import { emptyProject, withParticipants, withSlotCount } from './project'
 import { numberedSlots, seededRandom } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
-const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, teamsShort: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+const zero: Objectives = { missedMust: 0, missedPriority: 0, missedInterested: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
 
 describe('objectives', () => {
   test('measure counts each dimension', () => {
@@ -15,7 +15,6 @@ describe('objectives', () => {
       teams: people('t', 3),
       dms: people('d', 2),
       slots: numberedSlots(4),
-      teamFloor: 1,
       dmScores: { 't1|d1': 3, 't2|d1': 1, 't1|d2': 2 },
       teamScores: { 't2|d2': 2, 't1|d1': 1 },
     }
@@ -28,13 +27,14 @@ describe('objectives', () => {
       missedMust: 0,
       missedPriority: 1, // t1|d2
       missedInterested: 0,
-      teamsShort: 0,
+      dmsUnderHalf: 1, // d2 asked for t1 only and did not get it
+      teamsEmpty: 0,
       dmGaps: 2,
       missedTeam: 1, // t2|d2
       fillers: 1,
       teamGaps: 0,
     })
-    expect(measure(input, meetings.slice(0, 1)).teamsShort).toBe(2)
+    expect(measure(input, meetings.slice(0, 1)).teamsEmpty).toBe(2)
     expect(measure(input, []).missedMust).toBe(1)
   })
 
@@ -85,7 +85,7 @@ function busyProject(seed: number, density = 0.3) {
       if (rnd() < density) teamScores[`${t.id}|${d.id}`] = 1 + Math.floor(rnd() * 3)
     }
   }
-  return { ...p, dmScores, teamScores, teamFloor: 1 }
+  return { ...p, dmScores, teamScores }
 }
 
 describe('compactSlots', () => {

@@ -1,9 +1,10 @@
 // Build the Pareto frontier of schedules.
 //
 // 1. Several exact selections (min-cost flow) under different weightings of
-//    decision-maker vs team interest, with and without a per-team floor, with
-//    and without filling spare capacity — plus the simple greedy for good
-//    measure. Each is an optimum for SOME reasonable notion of "best".
+//    decision-maker vs team interest, with and without "every team gets at
+//    least one meeting", with and without filling spare capacity — plus the
+//    simple greedy for good measure. Each is an optimum for SOME reasonable
+//    notion of "best".
 // 2. Every selection is fitted into slots and compacted to remove windows.
 // 3. Measured on all objectives; only non-dominated schedules survive.
 //
@@ -13,8 +14,20 @@
 
 import { compactSlots } from './compact'
 import { selectByFlow } from './flow'
-import { addToFrontier, compareLex, measure, type ObjectiveInput, type Objectives } from './objectives'
-import { allPairs, assignSlots, MAX_SCORE, selectMeetings, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
+import { addToFrontier, compareLex, measure, type Objectives } from './objectives'
+import {
+  allPairs,
+  alwaysAvailable,
+  assignSlots,
+  availabilityOf,
+  MAX_SCORE,
+  selectMeetings,
+  type Availability,
+  type Meeting,
+  type PlacedMeeting,
+  type ScheduleInput,
+  type Slot,
+} from './scheduler'
 
 export interface Alternative {
   meetings: PlacedMeeting[]
@@ -31,8 +44,13 @@ export interface Alternative {
  * every priority, one priority every "interested", and those every team ask —
  * exactly the objective order — so the board it finds provably minimises
  * missed must-meets, then missed priorities, then missed "interested".
+ * 'fair' is tiered too, but ranks team asks BELOW the solver's fair-share
+ * tie-break: among boards equally good for the decision makers as a group, it
+ * spreads meetings by how much each one asked for, and only then listens to
+ * the teams. The other weightings let team asks buy DM points.
  */
-const WEIGHTINGS: [string, number | 'lexicographic' | 'tiered', number][] = [
+const WEIGHTINGS: [string, number | 'lexicographic' | 'tiered' | 'fair', number][] = [
+  ['fair', 'fair', 0],
   ['tiered', 'tiered', 1],
   ['dm-first', 'lexicographic', 1],
   ['dm-leaning', 3, 1],
@@ -48,7 +66,7 @@ function selectionKey(meetings: Meeting[]): string {
 }
 
 /** Every candidate selection worth trying, deduplicated. */
-export function candidateSelections(input: ObjectiveInput): { recipe: string; meetings: Meeting[] }[] {
+export function candidateSelections(input: ScheduleInput): { recipe: string; meetings: Meeting[] }[] {
   const out: { recipe: string; meetings: Meeting[] }[] = []
   const seen = new Set<string>()
   const add = (recipe: string, meetings: Meeting[]) => {
@@ -60,21 +78,23 @@ export function candidateSelections(input: ObjectiveInput): { recipe: string; me
 
   add('greedy', selectMeetings(input))
   add('greedy+fill', selectMeetings({ ...input, fillGaps: true }))
-  const floors = [...new Set([0, input.teamFloor])]
   const pairs = allPairs(input)
   const totalTeamScore = pairs.reduce((sum, p) => sum + p.teamScore, 0)
   // Tier weights: each tier is worth more than every pair of the tier below put together.
   const tier: number[] = [0, totalTeamScore + 1]
   for (let s = 2; s <= MAX_SCORE; s++) tier[s] = tier[s - 1] * (pairs.length + 1)
   for (const [name, dmWeight, wTeam] of WEIGHTINGS) {
-    for (const floor of floors) {
+    for (const floor of [0, 1]) {
       for (const fill of [false, true]) {
         // Requested pairs are worth at least 1000; a filler is worth 1, so
         // fillers only ever use capacity nothing requested could use.
         const points = (dm: number, team: number) =>
-          dmWeight === 'tiered' ? tier[dm] + wTeam * team : (dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight) * dm + wTeam * team
+          dmWeight === 'tiered' || dmWeight === 'fair'
+            ? tier[dm] + wTeam * team
+            : (dmWeight === 'lexicographic' ? totalTeamScore + 1 : dmWeight) * dm + wTeam * team
         const weight = (dm: number, team: number) => 1000 * points(dm, team) + (fill ? 1 : 0)
-        add(`${name}${floor ? ` floor${floor}` : ''}${fill ? ' fill' : ''}`, selectByFlow(input, { weight, teamFloor: floor }))
+        const tieBreak = dmWeight === 'fair' ? (_dm: number, team: number) => team : undefined
+        add(`${name}${floor ? ` floor${floor}` : ''}${fill ? ' fill' : ''}`, selectByFlow(input, { weight, teamFloor: floor, tieBreak }))
       }
     }
   }
@@ -82,15 +102,16 @@ export function candidateSelections(input: ObjectiveInput): { recipe: string; me
 }
 
 /** Fit a selection into slots with as few windows as possible. */
-export function placeCompactly(meetings: Meeting[], slots: Slot[]): PlacedMeeting[] {
-  return compactSlots(assignSlots(meetings, slots), slots)
+export function placeCompactly(meetings: Meeting[], slots: Slot[], available: Availability = alwaysAvailable): PlacedMeeting[] {
+  return compactSlots(assignSlots(meetings, slots, available), slots, available)
 }
 
 /** The frontier, best-first in objective priority order. */
-export function optimize(input: ObjectiveInput): Alternative[] {
+export function optimize(input: ScheduleInput): Alternative[] {
+  const available = availabilityOf([...input.teams, ...input.dms])
   let frontier: Alternative[] = []
   for (const { recipe, meetings } of candidateSelections(input)) {
-    const placed = placeCompactly(meetings, input.slots)
+    const placed = placeCompactly(meetings, input.slots, available)
     frontier = addToFrontier(frontier, { meetings: placed, objectives: measure(input, placed), recipe }, (a) => a.objectives)
   }
   return frontier.sort((a, b) => compareLex(a.objectives, b.objectives))

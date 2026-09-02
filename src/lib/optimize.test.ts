@@ -4,7 +4,7 @@ import { candidateSelections, optimize, placeCompactly } from './optimize'
 import { gapsOf, measure } from './objectives'
 import { assignSlots, findIssues } from './scheduler'
 
-const input = { ...demoProject(), teamFloor: 1 }
+const input = demoProject()
 
 describe('optimize on the demo', () => {
   test('frontier is valid and small', () => {

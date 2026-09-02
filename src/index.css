@@ -11,13 +11,14 @@
   --color-rule: #ded8ce;
   --color-accent: #9a3248;
   --color-accent-soft: #f6e9ec;
-  --color-warn: #b7791f;
-  --color-warn-soft: #fbf1dc;
+  /* Problems only: clashes, repeats, people booked when they cannot come */
+  --color-warn: #c0392b;
+  --color-warn-soft: #fbe5e2;
 
   /* Decision-maker interest 1..3 */
-  --color-rose-1: #f3e2e5;
-  --color-rose-2: #dfa7b2;
-  --color-rose-3: #9a3248;
+  --color-gold-1: #f6ecd2;
+  --color-gold-2: #e6c975;
+  --color-gold-3: #b07d12;
   /* Team interest 1..3 */
   --color-sea-1: #e1eef6;
   --color-sea-2: #9fc8e1;
@@ -61,6 +62,11 @@
 @utility vertical-text {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+}
+
+/* A cell the person cannot do: thin diagonal hatching. */
+@utility hatched {
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, var(--color-rule) 4px 5px);
 }
 
 @media print {

@@ -36,6 +36,6 @@ describe('sample day', () => {
     for (const a of front) expect(findIssues(a.meetings)).toEqual([])
     // Teams are the bottleneck (13 × 9 = 117 seats vs 17 × 9 = 153), so no board
     // should leave a team's day mostly empty when it asked for meetings.
-    for (const a of front) expect(a.objectives.teamsShort).toBe(0)
+    for (const a of front) expect(a.objectives.teamsEmpty).toBe(0)
   })
 })

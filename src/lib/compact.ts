@@ -6,8 +6,12 @@
 // swap along the whole chain always yields a valid schedule with exactly the
 // same meetings. We try chain swaps that would pull an outlying meeting into
 // a gap, keep the ones that reduce total windows, and stop at a local optimum.
+// A swap that would move anyone into a slot they cannot do is skipped.
+//
+// A "window" is an idle slot inside someone's day that they COULD have used:
+// slots they are unavailable for do not count.
 
-import { slotIndex, type Id, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
+import { alwaysAvailable, slotIndex, type Availability, type Id, type Meeting, type PlacedMeeting, type Slot } from './scheduler'
 
 type Node = string
 const teamNode = (m: Meeting): Node => 't:' + m.team
@@ -17,10 +21,12 @@ class Grid {
   readonly meetings: Meeting[]
   slot: number[]
   private at = new Map<Node, Map<number, number>>()
+  private can: (node: Node, slot: number) => boolean
 
-  constructor(meetings: Meeting[], slots: number[]) {
+  constructor(meetings: Meeting[], slots: number[], can: (node: Node, slot: number) => boolean) {
     this.meetings = meetings
     this.slot = [...slots]
+    this.can = can
     this.meetings.forEach((m, i) => {
       this.cell(teamNode(m)).set(this.slot[i], i)
       this.cell(dmNode(m)).set(this.slot[i], i)
@@ -33,8 +39,11 @@ class Grid {
     return c
   }
 
-  /** Swap slots a and b along the alternating chain starting at `node`. Returns the touched meetings. */
-  swapChain(node: Node, a: number, b: number): number[] {
+  /**
+   * Swap slots a and b along the alternating chain starting at `node`, unless
+   * that would put someone into a slot they cannot do. Returns whether it did.
+   */
+  swapChain(node: Node, a: number, b: number): boolean {
     const chain: number[] = []
     let n = node
     let s = a
@@ -48,6 +57,11 @@ class Grid {
     }
     for (const i of chain) {
       const m = this.meetings[i]
+      const to = this.slot[i] === a ? b : a
+      if (!this.can(teamNode(m), to) || !this.can(dmNode(m), to)) return false
+    }
+    for (const i of chain) {
+      const m = this.meetings[i]
       this.cell(teamNode(m)).delete(this.slot[i])
       this.cell(dmNode(m)).delete(this.slot[i])
     }
@@ -57,14 +71,24 @@ class Grid {
       this.cell(teamNode(m)).set(this.slot[i], i)
       this.cell(dmNode(m)).set(this.slot[i], i)
     }
-    return chain
+    return true
   }
 
-  /** Idle slots strictly inside this node's day. */
+  /** Idle slots strictly inside this node's day that they could have used. */
   windows(node: Node): number {
-    const used = [...this.cell(node).keys()]
-    if (used.length < 2) return 0
-    return Math.max(...used) - Math.min(...used) + 1 - used.length
+    return this.gaps(node).length
+  }
+
+  /** Slots inside this node's day that are free but could be used. */
+  gaps(node: Node): number[] {
+    const cells = this.cell(node)
+    const used = [...cells.keys()]
+    if (used.length < 2) return []
+    const lo = Math.min(...used)
+    const hi = Math.max(...used)
+    const out: number[] = []
+    for (let s = lo + 1; s < hi; s++) if (!cells.has(s) && this.can(node, s)) out.push(s)
+    return out
   }
 
   nodes(prefix: 't:' | 'd:'): Node[] {
@@ -84,11 +108,12 @@ class Grid {
 
 const better = (a: [number, number], b: [number, number]) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 
-function gridOf(placed: PlacedMeeting[], slots: Slot[]): Grid {
+function gridOf(placed: PlacedMeeting[], slots: Slot[], available: Availability): Grid {
   const index = slotIndex(slots)
   return new Grid(
     placed.map(({ team, dm }) => ({ team, dm })),
     placed.map((m) => index.get(m.slot)!),
+    (node, s) => available(node.slice(2), slots[s].id),
   )
 }
 
@@ -96,25 +121,22 @@ function gridOf(placed: PlacedMeeting[], slots: Slot[]): Grid {
  * Reduce decision-maker windows first, then team windows, by Kempe-chain slot
  * swaps. Never changes which meetings happen. Deterministic.
  */
-export function compactSlots(placed: PlacedMeeting[], slots: Slot[]): PlacedMeeting[] {
+export function compactSlots(placed: PlacedMeeting[], slots: Slot[], available: Availability = alwaysAvailable): PlacedMeeting[] {
   if (!placed.length) return placed
-  const grid = gridOf(placed, slots)
+  const grid = gridOf(placed, slots, available)
   let best = grid.score()
   let improved = true
   while (improved) {
     improved = false
     for (const node of [...grid.nodes('d:'), ...grid.nodes('t:')]) {
-      if (grid.windows(node) === 0) continue
+      const gaps = grid.gaps(node)
+      if (!gaps.length) continue
       const used = [...grid.cell(node).keys()].sort((x, y) => x - y)
-      const lo = used[0]
-      const hi = used[used.length - 1]
-      const gaps: number[] = []
-      for (let s = lo; s <= hi; s++) if (!grid.cell(node).has(s)) gaps.push(s)
       // Try pulling each meeting into each gap; keep the first swap that helps.
       for (const gap of gaps) {
         let done = false
         for (const from of used) {
-          grid.swapChain(node, from, gap)
+          if (!grid.swapChain(node, from, gap)) continue
           const score = grid.score()
           if (better(score, best)) {
             best = score
@@ -133,8 +155,8 @@ export function compactSlots(placed: PlacedMeeting[], slots: Slot[]): PlacedMeet
 }
 
 /** Convenience for tests: participant ids with a gap in their day. */
-export function participantsWithWindows(placed: PlacedMeeting[], slots: Slot[], side: 'team' | 'dm'): Id[] {
-  const grid = gridOf(placed, slots)
+export function participantsWithWindows(placed: PlacedMeeting[], slots: Slot[], side: 'team' | 'dm', available: Availability = alwaysAvailable): Id[] {
+  const grid = gridOf(placed, slots, available)
   return grid
     .nodes(side === 'team' ? 't:' : 'd:')
     .filter((n) => grid.windows(n) > 0)

@@ -162,7 +162,7 @@ function ScoreKey({ kind }: { kind: ScoreKind }) {
 function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; onCycle: (team: Id, dm: Id) => void }) {
   const scores = mode === 'dm' ? project.dmScores : project.teamScores
   const otherScores = mode === 'dm' ? project.teamScores : project.dmScores
-  const otherDot = mode === 'dm' ? 'bg-sea-3' : 'bg-rose-3'
+  const otherDot = mode === 'dm' ? 'bg-sea-3' : 'bg-gold-3'
   return (
     <div className="max-h-[75vh] overflow-auto">
       <table className="border-separate border-spacing-0 text-[0.8rem]">

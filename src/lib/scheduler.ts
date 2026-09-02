@@ -9,9 +9,15 @@
 //      fitted into the available slots. So step 1 never has to worry about time.
 //
 // Slots are entities with stable ids, like participants, so that meetings and
-// (later) per-slot availability survive inserting or removing a slot. The
-// algorithms need the slot ORDER, so they take the ordered `Slot[]` and work
-// with indices internally.
+// per-slot availability survive inserting or removing a slot. The algorithms
+// need the slot ORDER, so they take the ordered `Slot[]` and work with indices
+// internally.
+//
+// Availability: a participant may be marked unavailable for some slots (an
+// online guest in Tokyo cannot do the first two). Every function that places
+// or moves meetings takes an `Availability` and never puts anyone into a slot
+// they cannot do. With exceptions the König guarantee no longer holds, so
+// `assignSlots` may leave a meeting out; it then simply counts as unmet.
 
 export type Id = string
 
@@ -20,8 +26,28 @@ export interface Participant {
   name: string
   /** Joins by video rather than in the room. Informational for now. */
   online?: boolean
-  /** Hand-picked short form for dense tables, overriding the derived one ("EUROPE"). */
+  /** Hand-picked short form for dense tables, overriding the derived one ("Europe"). */
   code?: string
+  /** Slot ids this person cannot do. Absent = available all day. */
+  unavailable?: Id[]
+}
+
+/** Can `id` be in a meeting at `slot`? */
+export type Availability = (id: Id, slot: Id) => boolean
+
+export const alwaysAvailable: Availability = () => true
+
+export function availabilityOf(people: Participant[]): Availability {
+  const blocked = new Map<Id, Set<Id>>()
+  for (const p of people) if (p.unavailable?.length) blocked.set(p.id, new Set(p.unavailable))
+  if (!blocked.size) return alwaysAvailable
+  return (id, slot) => !blocked.get(id)?.has(slot)
+}
+
+/** How many slots each participant can do: their cap on meetings. */
+export function availableCounts(people: Participant[], slots: Slot[]): Map<Id, number> {
+  const ids = new Set(slots.map((s) => s.id))
+  return new Map(people.map((p) => [p.id, slots.length - (p.unavailable ?? []).filter((s) => ids.has(s)).length]))
 }
 
 /** 0 = none, 1 = interested, 2 = priority, 3 = must-meet */
@@ -116,10 +142,10 @@ export function rankOf(pair: Pair): number {
  */
 export function selectMeetings(input: ScheduleInput & { fillGaps?: boolean }): Meeting[] {
   const { fillGaps = false } = input
-  const slotCount = input.slots.length
+  const cap = availableCounts([...input.teams, ...input.dms], input.slots)
   const load = new Map<Id, number>()
   const loadOf = (id: Id) => load.get(id) || 0
-  const isFull = (p: Pair) => loadOf(p.team) >= slotCount || loadOf(p.dm) >= slotCount
+  const isFull = (p: Pair) => loadOf(p.team) >= (cap.get(p.team) ?? 0) || loadOf(p.dm) >= (cap.get(p.dm) ?? 0)
   const compareLoad = (a: Pair, b: Pair) =>
     loadOf(a.team) - loadOf(b.team) || loadOf(a.dm) - loadOf(b.dm) || a.ti - b.ti || a.di - b.di
   const chosen: Meeting[] = []
@@ -151,13 +177,23 @@ export function selectMeetings(input: ScheduleInput & { fillGaps?: boolean }): M
 
 /**
  * Give every meeting a slot so that no participant has two meetings in the
- * same slot. Bipartite edge colouring with one colour per slot: succeeds for
- * any input where nobody has more meetings than slots. Throws otherwise.
+ * same slot, and nobody is put into a slot they cannot do. Bipartite edge
+ * colouring with one colour per slot.
  *
- * Meetings are processed in order and take the earliest slot free for both
- * sides when possible, so higher-priority meetings tend to land earlier.
+ * Without availability exceptions this always succeeds when nobody has more
+ * meetings than slots (König). With exceptions it may not: a meeting that
+ * cannot be fitted is left out of the result, so callers see it as unmet.
+ *
+ * Each meeting takes the earliest slot free for both sides when there is one.
+ * Otherwise it takes a slot `a` free for one side, and swaps `a` with a slot
+ * `b` free for the other side along the chain of meetings alternating a, b,
+ * a, b… (in a bipartite graph the chain never comes back to the meeting
+ * itself). A swap that would move anyone into a slot they cannot do is not
+ * taken; all (a, b) pairs from both sides are tried before giving up.
+ * The most constrained meetings — the ones whose people can do the fewest
+ * slots — are placed first.
  */
-export function assignSlots(meetings: Meeting[], slots: Slot[]): PlacedMeeting[] {
+export function assignSlots(meetings: Meeting[], slots: Slot[], available: Availability = alwaysAvailable): PlacedMeeting[] {
   const slotCount = slots.length
   const bySlot = new Map<string, Map<number, Placement>>()
   const at = (node: string) => {
@@ -168,10 +204,13 @@ export function assignSlots(meetings: Meeting[], slots: Slot[]): PlacedMeeting[]
   const teamNode = (m: Meeting) => 't:' + m.team
   const dmNode = (m: Meeting) => 'd:' + m.dm
   const otherEnd = (m: Meeting, node: string) => (node === teamNode(m) ? dmNode(m) : teamNode(m))
-  const freeSlot = (node: string) => {
+  const can = (node: string, s: number) => available(node.slice(2), slots[s].id)
+  const canMeet = (m: Meeting, s: number) => can(teamNode(m), s) && can(dmNode(m), s)
+  const openSlots = (node: string) => {
     const used = at(node)
-    for (let s = 0; s < slotCount; s++) if (!used.has(s)) return s
-    return -1
+    const out: number[] = []
+    for (let s = 0; s < slotCount; s++) if (!used.has(s) && can(node, s)) out.push(s)
+    return out
   }
   const place = (m: Placement, slot: number) => {
     m.slot = slot
@@ -182,49 +221,78 @@ export function assignSlots(meetings: Meeting[], slots: Slot[]): PlacedMeeting[]
     at(teamNode(m)).delete(m.slot)
     at(dmNode(m)).delete(m.slot)
   }
-
-  const placed: Placement[] = meetings.map((m) => ({ team: m.team, dm: m.dm, slot: -1 }))
-  for (const m of placed) {
-    const u = teamNode(m)
-    const v = dmNode(m)
-    const a = freeSlot(u)
-    const b = freeSlot(v)
-    if (a < 0) throw new Error(`Team ${m.team} has more than ${slotCount} meetings`)
-    if (b < 0) throw new Error(`Decision maker ${m.dm} has more than ${slotCount} meetings`)
-    if (!at(v).has(a)) {
-      place(m, a)
-      continue
-    }
-    // Slot a is free for the team but taken for the dm. Follow the chain of
-    // meetings from the dm that alternate slot a, b, a, b… and swap them. In a
-    // bipartite graph this chain can never reach the team (it would have to
-    // arrive via slot a, which the team has free), so afterwards a is free for
-    // both sides.
+  /** The chain of meetings from `node` alternating slots a, b, a, b… */
+  const chain = (node: string, a: number, b: number) => {
     const path: Placement[] = []
-    let node = v
     let slot = a
     for (;;) {
       const e = at(node).get(slot)
-      if (!e) break
+      if (!e) return path
       path.push(e)
       node = otherEnd(e, node)
       slot = slot === a ? b : a
     }
+  }
+  /** Swap a and b along the chain from `node`, if that leaves everyone in slots they can do. */
+  const trySwap = (node: string, a: number, b: number) => {
+    const path = chain(node, a, b)
+    if (!path.every((e) => canMeet(e, e.slot === a ? b : a))) return false
     for (const e of path) unplace(e)
     for (const e of path) place(e, e.slot === a ? b : a)
-    place(m, a)
+    return true
   }
+
+  const fewest = (m: Meeting) => Math.min(openSlots(teamNode(m)).length, openSlots(dmNode(m)).length)
+  const pending: Placement[] = meetings
+    .map((m, i) => ({ team: m.team, dm: m.dm, slot: -1, i, k: fewest(m) }))
+    .sort((x, y) => x.k - y.k || x.i - y.i)
+  const placed: Placement[] = []
+  next: for (const m of pending) {
+    const u = teamNode(m)
+    const v = dmNode(m)
+    const forTeam = openSlots(u)
+    const forDm = openSlots(v)
+    for (const a of forTeam) {
+      if (!at(v).has(a) && can(v, a)) {
+        place(m, a)
+        placed.push(m)
+        continue next
+      }
+    }
+    for (const a of forTeam) {
+      for (const b of forDm) {
+        // a is free for the team but taken for the dm: swap a↔b along the dm's chain, then a is free for both.
+        // Or the mirror image: b is free for the dm but taken for the team.
+        if (at(v).has(a) && trySwap(v, a, b)) {
+          place(m, a)
+          placed.push(m)
+          continue next
+        }
+        if (at(u).has(b) && trySwap(u, b, a)) {
+          place(m, b)
+          placed.push(m)
+          continue next
+        }
+      }
+    }
+    // Nowhere to put it: left out.
+  }
+  placed.sort((x, y) => x.i - y.i)
   return placed.map((m) => ({ team: m.team, dm: m.dm, slot: slots[m.slot].id }))
 }
 
 /** A meeting at a slot POSITION; only used while colouring. */
 interface Placement extends Meeting {
   slot: number
+  /** Position in the input, so the output keeps the input order. */
+  i: number
+  /** How few slots its most constrained side has open when it was queued. */
+  k: number
 }
 
 /** Select and place in one go. */
 export function buildSchedule(input: ScheduleInput, { fillGaps = false } = {}): PlacedMeeting[] {
-  return assignSlots(selectMeetings({ ...input, fillGaps }), input.slots)
+  return assignSlots(selectMeetings({ ...input, fillGaps }), input.slots, availabilityOf([...input.teams, ...input.dms]))
 }
 
 export type Side = 'team' | 'dm'
@@ -237,6 +305,7 @@ const otherSide = (side: Side): Side => (side === 'team' ? 'dm' : 'team')
  *   move    — the partner is with `displaced` then, and the cell is empty: their meeting moves here, `displaced` is left free
  *   swap    — the partner is with `displaced` then, and the cell is taken: the two meetings trade partners
  *   repeat  — the change would make some pair meet twice in the day; never applied
+ *   unavailable — `who` cannot do this slot; never applied
  * A pair meeting twice is nonsense in this format (each seat a repeat takes is
  * a requested meeting that did not fit), so it is refused rather than flagged.
  */
@@ -246,9 +315,22 @@ export type AssignEffect =
   | { kind: 'move'; displaced: Id }
   | { kind: 'swap'; displaced: Id; /** the pair the displaced person ends up in */ second: Meeting }
   | { kind: 'repeat'; team: Id; dm: Id; at: Id }
+  | { kind: 'unavailable'; who: Id }
 
-export function assignEffect(meetings: PlacedMeeting[], slot: Id, side: Side, anchor: Id, partner: Id | null): AssignEffect {
+/** Effects that are refused rather than applied. */
+export const isRefused = (e: AssignEffect) => e.kind === 'repeat' || e.kind === 'unavailable'
+
+export function assignEffect(
+  meetings: PlacedMeeting[],
+  slot: Id,
+  side: Side,
+  anchor: Id,
+  partner: Id | null,
+  available: Availability = alwaysAvailable,
+): AssignEffect {
   if (partner === null) return { kind: 'clear' }
+  if (!available(anchor, slot)) return { kind: 'unavailable', who: anchor }
+  if (!available(partner, slot)) return { kind: 'unavailable', who: partner }
   const other = otherSide(side)
   const pairOf = (a: Id, b: Id): Meeting => (side === 'dm' ? { dm: a, team: b } : { team: a, dm: b })
   const meetsElsewhere = (m: Meeting) => meetings.find((x) => x.team === m.team && x.dm === m.dm && x.slot !== slot)
@@ -271,9 +353,16 @@ export function assignEffect(meetings: PlacedMeeting[], slot: Id, side: Side, an
  * `assignEffect`. Returns a new meetings array; unchanged when the effect
  * would be a repeat.
  */
-export function assignCell(meetings: PlacedMeeting[], slot: Id, side: Side, anchor: Id, partner: Id | null): PlacedMeeting[] {
-  const effect = assignEffect(meetings, slot, side, anchor, partner)
-  if (effect.kind === 'repeat') return meetings
+export function assignCell(
+  meetings: PlacedMeeting[],
+  slot: Id,
+  side: Side,
+  anchor: Id,
+  partner: Id | null,
+  available: Availability = alwaysAvailable,
+): PlacedMeeting[] {
+  const effect = assignEffect(meetings, slot, side, anchor, partner, available)
+  if (isRefused(effect)) return meetings
   const other = otherSide(side)
   const current = meetings.find((m) => m.slot === slot && m[side] === anchor) ?? null
   const out = meetings.filter((m) => m !== current)
@@ -321,13 +410,14 @@ export type Issue =
   | { type: 'duplicate'; team: Id; dm: Id; slots: [Id, Id] }
   | { type: 'team-clash'; team: Id; slot: Id }
   | { type: 'dm-clash'; dm: Id; slot: Id }
+  | { type: 'unavailable'; team: Id; dm: Id; slot: Id; who: Id }
 
 /**
  * Problems neither generation nor the editor can produce, but a hand-written
- * or old project file might: the same pair meeting twice, or someone booked
- * twice in one slot.
+ * or old project file might: the same pair meeting twice, someone booked
+ * twice in one slot, or a meeting at a time one of them cannot do.
  */
-export function findIssues(meetings: PlacedMeeting[]): Issue[] {
+export function findIssues(meetings: PlacedMeeting[], available: Availability = alwaysAvailable): Issue[] {
   const issues: Issue[] = []
   const seenPair = new Map<string, Id>()
   const seenTeamSlot = new Set<string>()
@@ -342,6 +432,7 @@ export function findIssues(meetings: PlacedMeeting[]): Issue[] {
     const ds = `${m.slot}|${m.dm}`
     if (seenDmSlot.has(ds)) issues.push({ type: 'dm-clash', dm: m.dm, slot: m.slot })
     else seenDmSlot.add(ds)
+    for (const who of [m.team, m.dm]) if (!available(who, m.slot)) issues.push({ type: 'unavailable', team: m.team, dm: m.dm, slot: m.slot, who })
   }
   return issues
 }

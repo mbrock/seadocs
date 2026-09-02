@@ -5,7 +5,7 @@
 // reordering them, or deleting one entry never shifts everybody else's
 // interest scores or meetings around. Ids come from one counter per project.
 
-import { MAX_SCORE, pairKey, type Id, type Participant, type PlacedMeeting, type Scores, type Slot } from './scheduler'
+import { availabilityOf, MAX_SCORE, pairKey, type Availability, type Id, type Participant, type PlacedMeeting, type Scores, type Slot } from './scheduler'
 
 export const MAX_SLOTS = 60
 
@@ -21,8 +21,6 @@ export interface Project {
   dmScores: Scores
   teamScores: Scores
   meetings: PlacedMeeting[]
-  /** Every team should get at least this many meetings (an objective, not a hard rule). */
-  teamFloor: number
   nextId: number
 }
 
@@ -36,7 +34,6 @@ export function emptyProject(): Project {
       dmScores: {},
       teamScores: {},
       meetings: [],
-      teamFloor: 1,
       nextId: 1,
     },
     10,
@@ -128,12 +125,34 @@ export function withParticipants(project: Project, teams: (RosterEntry | string)
 function reconcile(existing: Participant[], entries: RosterEntry[], prefix: string, counter: { next: number }): Participant[] {
   const byName = new Map(existing.map((p) => [p.name, p]))
   return entries.map(({ name, online, code }) => {
-    const id = byName.get(name)?.id ?? `${prefix}${counter.next++}`
+    const old = byName.get(name)
+    const id = old?.id ?? `${prefix}${counter.next++}`
     const p: Participant = { id, name }
     if (online) p.online = true
     if (code) p.code = code
+    if (old?.unavailable?.length) p.unavailable = old.unavailable
     return p
   })
+}
+
+/**
+ * Mark a participant as (un)available for a slot. Marking someone unavailable
+ * removes whatever meeting they had then, since it can no longer happen.
+ */
+export function withAvailability(project: Project, id: Id, slotId: Id, available: boolean): Project {
+  const update = (p: Participant): Participant => {
+    if (p.id !== id) return p
+    const rest = (p.unavailable ?? []).filter((s) => s !== slotId)
+    const unavailable = available ? rest : [...rest, slotId]
+    const { unavailable: _drop, ...clean } = p
+    return unavailable.length ? { ...clean, unavailable } : clean
+  }
+  const meetings = available ? project.meetings : project.meetings.filter((m) => m.slot !== slotId || (m.team !== id && m.dm !== id))
+  return { ...project, teams: project.teams.map(update), dms: project.dms.map(update), meetings }
+}
+
+export function availabilityOfProject(project: Pick<Project, 'teams' | 'dms'>): Availability {
+  return availabilityOf([...project.teams, ...project.dms])
 }
 
 /** Keep the first `count` slots (and their meetings), appending fresh ones or dropping the tail. */
@@ -150,24 +169,23 @@ export function withSlotLabels(project: Project, labels: string[]): Project {
   return { ...project, slots: project.slots.map((s, i) => ({ ...s, label: labels[i] ?? '' })) }
 }
 
-export function withSlots(project: Project, count: number | string, labels: string[]): Project {
-  return withSlotLabels(withSlotCount(project, count), labels)
+/** One slot per label, in order, keeping the ids (and meetings) of the slots that stay. At least one slot. */
+export function withSlots(project: Project, labels: string[]): Project {
+  return withSlotLabels(withSlotCount(project, Math.max(1, labels.length)), labels)
 }
 
-export function withTeamFloor(project: Project, teamFloor: number | string): Project {
-  return { ...project, teamFloor: cleanFloor(teamFloor) }
-}
-
-export function cleanFloor(x: unknown): number {
-  const n = Math.floor(Number(x))
-  return Number.isFinite(n) && n >= 0 ? Math.min(n, MAX_SLOTS) : 1
-}
-
-/** Drop scores and meetings that refer to participants or slots that no longer exist. */
+/** Drop scores, meetings and availability marks that refer to participants or slots that no longer exist. */
 export function prune(project: Project): Project {
   const teamIds = new Set(project.teams.map((t) => t.id))
   const dmIds = new Set(project.dms.map((d) => d.id))
   const slotIds = new Set(project.slots.map((s) => s.id))
+  const keepSlots = (p: Participant): Participant => {
+    if (!p.unavailable) return p
+    const unavailable = p.unavailable.filter((s) => slotIds.has(s))
+    if (unavailable.length === p.unavailable.length) return p
+    const { unavailable: _drop, ...clean } = p
+    return unavailable.length ? { ...clean, unavailable } : clean
+  }
   const keep = (scores: Scores): Scores =>
     Object.fromEntries(
       Object.entries(scores).filter(([k, v]) => {
@@ -176,7 +194,14 @@ export function prune(project: Project): Project {
       }),
     )
   const meetings = project.meetings.filter((m) => teamIds.has(m.team) && dmIds.has(m.dm) && slotIds.has(m.slot))
-  return { ...project, dmScores: keep(project.dmScores), teamScores: keep(project.teamScores), meetings }
+  return {
+    ...project,
+    teams: project.teams.map(keepSlots),
+    dms: project.dms.map(keepSlots),
+    dmScores: keep(project.dmScores),
+    teamScores: keep(project.teamScores),
+    meetings,
+  }
 }
 
 export function withScore(project: Project, kind: ScoreKind, teamId: Id, dmId: Id, score: number): Project {

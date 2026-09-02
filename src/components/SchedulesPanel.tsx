@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { findIssues, indexMeetings, type Id, type MeetingIndex, type Participant, type Side } from '../lib/scheduler'
-import { participantName, slotLabel, tableLabel, type Project } from '../lib/project'
+import { findIssues, indexMeetings, type Availability, type Id, type MeetingIndex, type Participant, type Side } from '../lib/scheduler'
+import { availabilityOfProject, participantName, slotLabel, tableLabel, type Project } from '../lib/project'
 import { download, personalCsv } from '../lib/csv'
 import { Button, Chooser, Empty, OnlineMark, Panel, PanelHeader } from './ui'
 import { useNames } from './useNames'
@@ -13,7 +13,8 @@ interface Props {
 export function SchedulesPanel({ project }: Props) {
   const hasBoard = project.meetings.length > 0
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
-  const problems = useMemo(() => findIssues(project.meetings).length, [project.meetings])
+  const available = useMemo(() => availabilityOfProject(project), [project])
+  const problems = useMemo(() => findIssues(project.meetings, available).length, [project.meetings, available])
   const blocked = problems > 0 ? `Fix the ${problems === 1 ? 'problem' : `${problems} problems`} on the board first` : undefined
   const [chosen, setChosen] = useState<Id | null>(null)
   const [printAll, setPrintAll] = useState(false)
@@ -69,7 +70,7 @@ export function SchedulesPanel({ project }: Props) {
                 Print
               </Button>
             </PanelHeader>
-            <RunningOrder project={project} index={index} person={current.person} side={current.side} />
+            <RunningOrder project={project} index={index} person={current.person} side={current.side} available={available} />
           </Panel>
         )}
       </div>
@@ -78,7 +79,7 @@ export function SchedulesPanel({ project }: Props) {
         <div className="hidden print:block">
           {people.map(({ person, side }) => (
             <div key={person.id} className="print-page">
-              <RunningOrder project={project} index={index} person={person} side={side} />
+              <RunningOrder project={project} index={index} person={person} side={side} available={available} />
             </div>
           ))}
         </div>
@@ -88,7 +89,19 @@ export function SchedulesPanel({ project }: Props) {
 }
 
 /** A single person's day: every slot, who they meet or a blank. */
-function RunningOrder({ project, index, person, side }: { project: Project; index: MeetingIndex; person: Participant; side: Side }) {
+function RunningOrder({
+  project,
+  index,
+  person,
+  side,
+  available,
+}: {
+  project: Project
+  index: MeetingIndex
+  person: Participant
+  side: Side
+  available: Availability
+}) {
   const other: Side = side === 'team' ? 'dm' : 'team'
   const meetingAt = (slot: Id) => (side === 'dm' ? index.byCell.get(`${slot}|${person.id}`) : index.byTeamSlot.get(`${slot}|${person.id}`))
   const meetings = project.slots.filter((s) => meetingAt(s.id)).length
@@ -124,8 +137,10 @@ function RunningOrder({ project, index, person, side }: { project: Project; inde
                       {participantName(project, partnerId)}
                       <OnlineMark show={partner?.online} />
                     </>
-                  ) : (
+                  ) : available(person.id, slot.id) ? (
                     '—'
+                  ) : (
+                    <span className="text-[0.85rem] text-muted italic">not available</span>
                   )}
                 </td>
                 {side === 'team' && (
