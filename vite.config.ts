@@ -7,6 +7,11 @@ export default defineConfig({
   // a GitHub Pages project path like /seadocs/.
   base: './',
   plugins: [react(), tailwindcss()],
+  server: {
+    // The dev server only listens on loopback; the orb portal proxies to it
+    // under these public hostnames.
+    allowedHosts: ['.orb.swa.sh', '.onamp.dev'],
+  },
   test: {
     include: ['src/**/*.test.ts'],
   },
