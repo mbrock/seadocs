@@ -131,18 +131,18 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
   const board = { project, names, index, available }
 
   return (
-    <div className="flex flex-col gap-2">
+    <>
       {hasBoard ? (
         <>
-          <Panel className="min-w-0">
+          <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
             <Grid board={board} rows="dm" selected={selected} onSelect={setCell} />
           </Panel>
-          <Panel className="min-w-0">
+          <Panel className="max-w-full min-w-0">
             <Grid board={board} rows="team" selected={selected} onSelect={setCell} />
           </Panel>
         </>
       ) : (
-        <Panel className="min-w-0">
+        <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
           <Empty>
             {!hasPeople
               ? 'Add people and requests first.'
@@ -164,7 +164,7 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
           />
         </aside>
       )}
-    </div>
+    </>
   )
 }
 

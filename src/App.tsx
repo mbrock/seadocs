@@ -54,16 +54,14 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-evenly gap-4">
           <SetupPanel project={project} onChange={setProject} generating={generating} />
-          <section id="board" className="scroll-mt-12">
-            <BoardPanel
-              project={project}
-              onChange={setProject}
-              onGeneratedMeetings={setGeneratedMeetings}
-              onGeneratingChange={setGenerating}
-            />
-          </section>
+          <BoardPanel
+            project={project}
+            onChange={setProject}
+            onGeneratedMeetings={setGeneratedMeetings}
+            onGeneratingChange={setGenerating}
+          />
         </div>
       </main>
     </div>

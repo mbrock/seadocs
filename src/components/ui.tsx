@@ -21,8 +21,8 @@ export function Button({ variant = 'default', className = '', ...props }: Button
   )
 }
 
-export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-[4px] border border-rule bg-paper ${className}`}>{children}</section>
+export function Panel({ children, className = '', id }: { children: ReactNode; className?: string; id?: string }) {
+  return <section id={id} className={`rounded-[4px] border border-rule bg-paper ${className}`}>{children}</section>
 }
 
 export function Empty({ children }: { children: ReactNode }) {

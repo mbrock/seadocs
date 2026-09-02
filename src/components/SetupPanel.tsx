@@ -48,7 +48,7 @@ export function SetupPanel({ project, onChange, generating }: Props) {
     onChange((current) => prune({ ...current, [side]: current[side].filter((person) => person.id !== id) }))
 
   return (
-    <div className="flex flex-wrap items-start gap-3">
+    <>
       <RequestMatrix
         kind="dm"
         rows={project.dms}
@@ -75,7 +75,7 @@ export function SetupPanel({ project, onChange, generating }: Props) {
         onDelete={(id) => deleteParticipant('teams', id)}
         onAdd={() => addParticipant('teams')}
       />
-    </div>
+    </>
   )
 }
 
