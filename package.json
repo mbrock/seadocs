@@ -1,12 +1,30 @@
 {
   "name": "meeting-board",
-  "version": "0.1.0",
+  "private": true,
+  "version": "0.2.0",
   "description": "One-to-one meeting scheduler for festival marketplaces: project teams × decision makers.",
   "type": "module",
-  "private": true,
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\"",
-    "start": "npx -y serve -l 8000 ."
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "oxlint"
   },
-  "engines": { "node": ">=20" }
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "oxlint": "^1.79.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
 }

@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #1b2430;
+  --color-paper: #f6f3ec;
+  --color-paper-dim: #ede8db;
+  --color-amber: #c98a2b;
+  --color-amber-deep: #b67a20;
+  --color-amber-dim: #e7c892;
+  --color-amber-pale: #f0e4c8;
+  --color-teal: #3f6b63;
+  --color-line: #d8d0bc;
+  --color-brick: #a6432f;
+  --color-cream: #fffdf8;
+  --color-muted: #5b5548;
+  --color-faint: #c8c0ac;
+
+  --font-serif: Georgia, 'Iowan Old Style', serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-serif antialiased;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+  }
+}

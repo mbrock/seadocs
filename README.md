@@ -7,8 +7,8 @@ time slots. Given who wants to meet whom, it builds the board — which team sit
 with which decision maker in which slot — and produces the per-person running
 orders you'd print or send out.
 
-It is a static site with no build step and no server. Everything stays in the
-browser; projects are saved as JSON files you can email to a colleague.
+It is a static site with no server. Everything stays in the browser (autosaved
+to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
@@ -31,7 +31,7 @@ browser; projects are saved as JSON files you can email to a colleague.
 
 ## How the schedule is built
 
-Generation is two independent steps (see [`app/scheduler.js`](app/scheduler.js)):
+Generation is two independent steps (see [`src/lib/scheduler.ts`](src/lib/scheduler.ts)):
 
 **1. Choose which meetings happen.** Every team × decision-maker pair gets a
 rank: decision-maker score first, team score as tie-break. Pairs are taken in
@@ -59,32 +59,39 @@ optimal; that's a candidate for a later iteration.
 
 ## Running it
 
-It's plain HTML, CSS and ES modules, so any static file server works:
+React + TypeScript + Tailwind, built with Vite. Tests run with Vitest.
 
 ```sh
-npm start            # serves on http://localhost:8000
-npm test             # runs the scheduler and model tests with node --test
+npm install
+npm run dev          # dev server with hot reload
+npm test             # scheduler and model tests
+npm run lint         # oxlint
+npm run build        # production build into dist/
 ```
-
-Opening `index.html` directly from disk won't work (browsers block ES module
-imports over `file://`).
 
 ### Deploying to GitHub Pages
 
-Settings → Pages → *Deploy from a branch* → `main`, folder `/ (root)`. Nothing
-else is needed. The `test` workflow runs the tests on every push.
+The `build and deploy` workflow lints, tests, builds, and publishes `dist/` to
+GitHub Pages on every push to `main`. One-time setup in the repository:
+Settings → Pages → Source: **GitHub Actions**. The build uses a relative base
+path, so it works under a project path like `/seadocs/` without configuration.
 
 ## Layout
 
 ```
-index.html          page structure
-style.css           styles, including print styles for personal boards
-app/scheduler.js    pure scheduling logic: select meetings, assign slots, stats, issues
-app/state.js        project model, stable participant ids, save/load, v1 import, demo data
-app/render.js       HTML string renderers and CSV export (all text escaped)
-app/main.js         wires DOM events to the model; autosaves to localStorage
-test/               node --test suites for scheduler and state
+index.html                 Vite entry
+src/main.tsx               mounts <App/>
+src/index.css              Tailwind import and the colour/font theme
+src/App.tsx                tabs, project state (persisted to localStorage)
+src/components/            one component per panel, plus small shared UI pieces
+src/lib/scheduler.ts       pure scheduling logic: select meetings, assign slots, stats, issues
+src/lib/state.ts           project model, stable participant ids, save/load, v1 import, demo data
+src/lib/csv.ts             CSV exports and file download
+src/lib/*.test.ts          Vitest suites
 ```
+
+The scheduling and model code has no React or DOM dependency; the components
+only call its functions and render the result.
 
 ### Project file format (v2)
 
