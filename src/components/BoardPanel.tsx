@@ -134,7 +134,7 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onSolverSta
   return (
     <>
       {hasBoard ? (
-        <Panel id="board" className="max-w-full min-w-0 scroll-mt-12">
+        <Panel id="board" className="w-full min-w-0 scroll-mt-12">
           <Grid board={board} selected={selected} onSelect={setCell} />
         </Panel>
       ) : (
@@ -197,7 +197,7 @@ function Grid({
           scope="row"
           className="sticky left-0 z-10 h-6 w-px bg-inherit px-1.5 py-0 text-left align-middle font-semibold leading-none whitespace-nowrap"
         >
-          <Name person={person} display={names.get(person.id)} side={rows} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
+          <Name person={person} display={names.get(person.id)} side={rows} variant={rows === 'team' ? 'code' : 'short'} truncate={false} className="flex" />
         </th>
         {project.slots.map((slot) => {
           const meeting = meetingAt(slot.id, person.id)
@@ -224,7 +224,7 @@ function Grid({
                 }`}
               >
                 {partner && <RequestMark dm={dmAsked} team={teamAsked} />}
-                {partner && <Name person={partner} display={names.get(partner.id)} side={rows === 'dm' ? 'team' : 'dm'} variant="code" className="flex" />}
+                {partner && <Name person={partner} display={names.get(partner.id)} side={rows === 'dm' ? 'team' : 'dm'} variant="code" truncate={false} className="flex" />}
                 {(repeat || (off && partner)) && (
                   <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
                     {repeat ? '×2' : '!'}

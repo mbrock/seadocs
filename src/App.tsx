@@ -52,7 +52,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="wrap flex-1 py-3 print:p-0">
+      <main className="wrap flex-1 pt-3 pb-12 print:p-0">
         <div className="flex flex-wrap items-start justify-evenly gap-4">
           <SetupPanel project={project} onChange={setProject} />
           <BoardPanel

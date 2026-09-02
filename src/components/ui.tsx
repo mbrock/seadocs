@@ -71,18 +71,20 @@ export function Name({
   side,
   className = '',
   variant = 'short',
+  truncate = true,
 }: {
   person: Participant
   display?: DisplayName
   side: Side
   className?: string
   variant?: 'short' | 'code'
+  truncate?: boolean
 }) {
   const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
   return (
     <span className={`inline-flex max-w-full min-w-0 items-baseline ${side === 'team' ? 'italic' : ''} ${className}`} title={person.name}>
       {display?.tag && <Tag>{display.tag}</Tag>}
-      <span className="truncate">{text}</span>
+      <span className={truncate ? 'truncate' : 'whitespace-nowrap'}>{text}</span>
     </span>
   )
 }
