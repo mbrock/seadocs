@@ -42,8 +42,9 @@ save / open / new, and shows a problem count when the board has one.
   too, a white cell with a name is a meeting nobody asked for, and a pair that
   meets twice is marked ×2. Click any cell to open it in the side panel: who is
   there, and every counterpart that could be, strongest request first, marked
-  *free*, *swap with …* (the two meetings trade partners, with a warning when
-  the swap would make a pair meet twice) or *already meet*. Repeats and double
+  *free*, *swap* (the two meetings trade partners; the row shows what the
+  other person gets and its scores, or warns when they'd meet again), *moves
+  from …* (the candidate leaves someone else's slot free) or *already meet*. Repeats and double
   bookings are the board's two kinds of *problem*; both are counted in the
   header bar and listed in the side panel. When no cell is selected the side
   panel shows the board's figures and the requested meetings that did not fit.

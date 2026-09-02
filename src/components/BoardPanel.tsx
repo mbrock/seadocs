@@ -286,9 +286,11 @@ function Inspector({
       const s = scoresFor(c.id)
       const met = index.byPair.get(pairKey(s.team, s.dm))
       const swapWith = busyWith(c.id)
-      // A swap hands the current occupant to `swapWith`; warn if those two already meet elsewhere.
-      const swapRepeats = swapWith !== null && current !== null && index.byPair.has(side === 'dm' ? pairKey(current, swapWith) : pairKey(swapWith, current))
-      return { person: c, ...s, rank: s.dmScore * 4 + s.teamScore, alreadyAt: met?.[0]?.slot ?? null, swapWith, swapRepeats }
+      // A swap hands the current occupant to `swapWith`: that second pair has its own scores, and may already meet elsewhere.
+      const swapPair = swapWith !== null && current !== null ? (side === 'dm' ? { team: current, dm: swapWith } : { team: swapWith, dm: current }) : null
+      const swapScores = swapPair ? { dm: scoreOf(project.dmScores, swapPair.team, swapPair.dm), team: scoreOf(project.teamScores, swapPair.team, swapPair.dm) } : null
+      const swapRepeats = swapPair !== null && index.byPair.has(pairKey(swapPair.team, swapPair.dm))
+      return { person: c, ...s, rank: s.dmScore * 4 + s.teamScore, alreadyAt: met?.[0]?.slot ?? null, swapWith, swapScores, swapRepeats }
     })
     // Strongest request first; pairs that already meet sink to the bottom since they cannot be picked.
     .sort((a, b) => Number(a.alreadyAt !== null) - Number(b.alreadyAt !== null) || b.rank - a.rank || a.person.name.localeCompare(b.person.name))
@@ -350,6 +352,8 @@ interface CandidateRow {
   teamScore: number
   alreadyAt: Id | null
   swapWith: Id | null
+  /** Scores of the pair a swap would create (`swapWith` + the current occupant); null when the cell is free. */
+  swapScores: { dm: number; team: number } | null
   swapRepeats: boolean
 }
 
@@ -370,6 +374,7 @@ function CandidateList({
   current: Id | null
 }) {
   if (!rows.length) return <p className="py-1 text-[0.8rem] text-muted">Nobody.</p>
+  const code = (id: Id) => names.get(id)?.code ?? participantName(project, id)
   return (
     <ul className="divide-y divide-rule">
       {rows.map((r) => {
@@ -383,25 +388,30 @@ function CandidateList({
               title={
                 already
                   ? `They already meet at ${slotLabel(project, r.alreadyAt!)} — a second meeting would be a repeat`
-                  : r.swapWith
-                    ? `Swap: ${participantName(project, r.swapWith)} gets the current occupant`
-                    : 'Free in this slot'
+                  : r.swapWith && current
+                    ? `Swap: ${participantName(project, r.swapWith)} gets ${participantName(project, current)} instead`
+                    : r.swapWith
+                      ? `Moves here from ${participantName(project, r.swapWith)}, whose slot becomes free`
+                      : 'Free in this slot'
               }
               className="flex w-full cursor-pointer items-center justify-between gap-2 py-1.5 text-left hover:bg-canvas disabled:cursor-default disabled:opacity-45"
             >
               <span className="min-w-0">
                 <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
                 <span className="block text-[0.75rem] text-muted">
-                  {already
-                    ? `already meet at ${slotLabel(project, r.alreadyAt!)}`
-                    : r.swapWith
-                      ? `swap with ${names.get(r.swapWith)?.code ?? participantName(project, r.swapWith)}`
-                      : 'free'}
-                  {!already && r.swapRepeats && current && (
-                    <span className="text-warn">
-                      {' '}
-                      · {names.get(r.swapWith!)?.code} would meet {names.get(current)?.code} twice
-                    </span>
+                  {already ? (
+                    `already meet at ${slotLabel(project, r.alreadyAt!)}`
+                  ) : r.swapWith && current && r.swapScores ? (
+                    <>
+                      swap · {code(r.swapWith)} gets {code(current)}{' '}
+                      {r.swapRepeats ? <span className="text-warn">again — they already meet</span> : <ScorePair dm={r.swapScores.dm} team={r.swapScores.team} />}
+                    </>
+                  ) : r.swapWith ? (
+                    <>
+                      moves from {code(r.swapWith)} <span className="text-warn">· leaves {code(r.swapWith)} free</span>
+                    </>
+                  ) : (
+                    'free'
                   )}{' '}
                   · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
                 </span>
@@ -436,7 +446,7 @@ function Summary({
     <Panel>
       <PanelHeader title="This board" />
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-3 py-3">
-        <Figure value={`${stats.meetings}/${stats.capacity}`} label="seats filled" />
+        <Figure value={`${stats.meetings}/${stats.capacity}`} label="meetings possible" />
         <Figure value={`${stats.mustMeetSatisfied}/${stats.mustMeetRequested}`} label="must-meets" tone={stats.mustMeetSatisfied < stats.mustMeetRequested ? 'warn' : 'ink'} />
         <Figure value={`${stats.dmSatisfied}/${stats.dmRequested}`} label="DM asks met" />
         <Figure value={`${stats.teamSatisfied}/${stats.teamRequested}`} label="team asks met" />

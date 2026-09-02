@@ -307,6 +307,7 @@ export function findIssues(meetings: PlacedMeeting[]): Issue[] {
 
 export interface Stats {
   meetings: number
+  /** The most meetings any board could hold: the smaller side × slots. */
   capacity: number
   dmRequested: number
   dmSatisfied: number
@@ -325,7 +326,7 @@ export function computeStats(input: ScheduleInput, meetings: PlacedMeeting[]): S
   const { byPair } = indexMeetings(meetings)
   const stats: Stats = {
     meetings: meetings.length,
-    capacity: input.dms.length * input.slots.length,
+    capacity: Math.min(input.dms.length, input.teams.length) * input.slots.length,
     dmRequested: 0,
     dmSatisfied: 0,
     mustMeetRequested: 0,
