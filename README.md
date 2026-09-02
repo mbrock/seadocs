@@ -12,11 +12,11 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-The app has four views, reached from the header bar (the view is in the URL
+The app has three views, reached from the header bar (the view is in the URL
 hash, so links and back/forward work). The same bar holds undo / redo and
 save / open / new, and shows a problem count when the board has one.
 
-- **Setup** — paste the list of teams and the list of decision makers (one
+- **Setup** — a two-step workflow for people/day and requests. Paste the list of teams and the list of decision makers (one
   per line as `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
@@ -24,8 +24,11 @@ save / open / new, and shows a problem count when the board has one.
   `Title = Code` or `Name = Code` to choose the short form yourself; a
   trailing `*` marks someone who joins online), name the event (printed on
   every running order), and list the slots, one line per slot — usually the
-  times. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
-- **Interest** — one compact grid, rows = teams, columns = decision makers;
+  times. A review shows additions, identity-preserving renames and deletions
+  before Apply; ambiguous bulk replacements are blocked, and destructive
+  deletions require confirmation. Example loaders fill in the BSD 2026 sample
+  day or a random 26 × 26. Unapplied text stays intact while moving around the app.
+  The second step is one compact request grid, rows = teams, columns = decision makers;
   every cell has two checkboxes, gold for the decision maker and blue for the
   team. Not asked is not a refusal; it only means nobody asked. Decision-maker
   interest is the primary signal; team interest is
@@ -198,8 +201,8 @@ src/index.css              Tailwind + Public Sans import and the colour/font the
 src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, AskPair, ask tints
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
-src/components/SetupPanel.tsx    rosters, event name, slots, example loaders
-src/components/InterestPanel.tsx compact two-sided interest grid
+src/components/SetupPanel.tsx    unified people/day and requests workflow, previews, example loaders
+src/components/InterestPanel.tsx compact two-sided request grid used by Setup
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/components/Frontier.tsx      which board is on screen, and the folded-away comparison of alternatives
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
@@ -212,7 +215,7 @@ src/lib/objectives.ts      the objective vector, dominance, frontier merge
 src/lib/describe.ts        boards in words: names by trade-off, one-line quality
 src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
 src/lib/project.ts         project model: participants, slots, asks, meetings, with* update functions
-src/lib/persist.ts         project file format (v4) with v1–v3 migration, localStorage
+src/lib/persist.ts         project file format (v5) with v1–v4 migration, localStorage
 src/lib/sample.ts          the BSD 2026 sample day (real names, invented interest)
 src/lib/fixtures.ts        seeded random 26 × 26 stress-test day
 src/lib/csv.ts             CSV exports and file download
@@ -222,11 +225,11 @@ src/lib/*.test.ts          Vitest suites
 The scheduling and model code has no React or DOM dependency; the components
 only call its functions and render the result.
 
-### Project file format (v4)
+### Project file format (v5)
 
 ```jsonc
 {
-  "version": 4,
+  "version": 5,
   "title": "Baltic Sea Docs 2026 · One-to-one meetings, day 1",   // optional
   "teams": [{ "id": "t1", "name": "Team A", "code": "ALPHA" }],   // "code" only when set by hand
   "dms":   [{ "id": "d2", "name": "Fund X", "online": true, "unavailable": ["s4"] }],  // "online" only when true; "unavailable" = slot ids they cannot do
@@ -237,6 +240,13 @@ only call its functions and render the result.
   "nextId": 5
 }
 ```
+
+Team, DM and slot IDs are durable references. Names are display data: a safe
+rename or reorder keeps the ID, so requests, availability and meetings remain
+attached. Existing v1 files receive IDs during migration; v2–v4 IDs and linked
+data are retained. A stale `nextId` counter is repaired. Current-format files
+with duplicate identities or dangling requests/meetings are rejected rather
+than guessed at, leaving the project already open in the browser untouched.
 
 Participants and slots have stable ids from one shared counter, so you can add,
 remove, or reorder names in Setup without the interest grid shifting under you,

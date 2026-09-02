@@ -51,6 +51,29 @@ export interface RosterEntry {
   code?: string
 }
 
+export interface RosterChange {
+  kind: 'renamed' | 'added' | 'deleted'
+  id?: Id
+  from?: string
+  to?: string
+}
+
+export interface ParticipantReconciliation {
+  teams: Participant[]
+  dms: Participant[]
+  nextId: number
+  changes: RosterChange[]
+  /** Entries that could be renames or a mixture of additions and deletions. */
+  ambiguous: { side: 'team' | 'dm'; oldNames: string[]; newNames: string[] }[]
+  removed: {
+    participants: number
+    dmAsks: number
+    teamAsks: number
+    meetings: number
+    availability: number
+  }
+}
+
 /** One entry per line, trimmed, blanks and duplicate names dropped. */
 export function parseRoster(text: string): RosterEntry[] {
   const seen = new Set<string>()
@@ -111,29 +134,96 @@ export function participantName(project: Project, id: Id): string {
   return p ? p.name : id
 }
 
-/** Replace the participant lists, keeping ids (and so asks) for names that still exist. */
-export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): Project {
+/**
+ * Preview a roster replacement without changing the project. Exact names keep
+ * their ids regardless of order. One unmatched old/new entry is an unambiguous
+ * rename and also keeps its id. Larger mixed unmatched sets are deliberately
+ * not guessed: they could equally be renames or delete/add operations.
+ */
+export function reconcileParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): ParticipantReconciliation {
   const counter = { next: project.nextId }
   const entry = (e: RosterEntry | string): RosterEntry => (typeof e === 'string' ? { name: e, online: false } : e)
-  return prune({
-    ...project,
-    teams: reconcile(project.teams, teams.map(entry), 't', counter),
-    dms: reconcile(project.dms, dms.map(entry), 'd', counter),
+  const teamResult = reconcile(project.teams, teams.map(entry), 't', 'team', counter)
+  const dmResult = reconcile(project.dms, dms.map(entry), 'd', 'dm', counter)
+  const nextTeams = teamResult.people
+  const nextDms = dmResult.people
+  const teamIds = new Set(nextTeams.map((p) => p.id))
+  const dmIds = new Set(nextDms.map((p) => p.id))
+  const removedPair = (key: string) => {
+    const [team, dm] = key.split('|')
+    return !teamIds.has(team) || !dmIds.has(dm)
+  }
+  const removedIds = new Set([
+    ...project.teams.filter((p) => !teamIds.has(p.id)).map((p) => p.id),
+    ...project.dms.filter((p) => !dmIds.has(p.id)).map((p) => p.id),
+  ])
+  return {
+    teams: nextTeams,
+    dms: nextDms,
     nextId: counter.next,
-  })
+    changes: [...teamResult.changes, ...dmResult.changes],
+    ambiguous: [...teamResult.ambiguous, ...dmResult.ambiguous],
+    removed: {
+      participants: removedIds.size,
+      dmAsks: Object.keys(project.dmAsks).filter(removedPair).length,
+      teamAsks: Object.keys(project.teamAsks).filter(removedPair).length,
+      meetings: project.meetings.filter((m) => removedIds.has(m.team) || removedIds.has(m.dm)).length,
+      availability: [...project.teams, ...project.dms]
+        .filter((p) => removedIds.has(p.id))
+        .reduce((sum, p) => sum + (p.unavailable?.length ?? 0), 0),
+    },
+  }
 }
 
-function reconcile(existing: Participant[], entries: RosterEntry[], prefix: string, counter: { next: number }): Participant[] {
-  const byName = new Map(existing.map((p) => [p.name, p]))
-  return entries.map(({ name, online, code }) => {
-    const old = byName.get(name)
+/** Apply a non-ambiguous reconciliation. Call reconcileParticipants first in interactive code. */
+export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): Project {
+  const result = reconcileParticipants(project, teams, dms)
+  if (result.ambiguous.length) throw new Error('Ambiguous roster edit; apply renames separately from additions or deletions')
+  return prune({ ...project, teams: result.teams, dms: result.dms, nextId: result.nextId })
+}
+
+function reconcile(
+  existing: Participant[],
+  entries: RosterEntry[],
+  prefix: string,
+  side: 'team' | 'dm',
+  counter: { next: number },
+): { people: Participant[]; changes: RosterChange[]; ambiguous: ParticipantReconciliation['ambiguous'] } {
+  const normalized = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+  const byName = new Map(existing.map((p) => [normalized(p.name), p]))
+  const matched = new Map<number, Participant>()
+  const used = new Set<Id>()
+  entries.forEach((e, i) => {
+    const old = byName.get(normalized(e.name))
+    if (old && !used.has(old.id)) {
+      matched.set(i, old)
+      used.add(old.id)
+    }
+  })
+  const oldLeft = existing.filter((p) => !used.has(p.id))
+  const newLeft = entries.map((_, i) => i).filter((i) => !matched.has(i))
+  const ambiguous = oldLeft.length && newLeft.length && (oldLeft.length !== 1 || newLeft.length !== 1)
+    ? [{ side, oldNames: oldLeft.map((p) => p.name), newNames: newLeft.map((i) => entries[i].name) }]
+    : []
+  if (!ambiguous.length && oldLeft.length === 1 && newLeft.length === 1) {
+    matched.set(newLeft[0], oldLeft[0])
+    used.add(oldLeft[0].id)
+  }
+
+  const changes: RosterChange[] = []
+  const people = entries.map(({ name, online, code }, i) => {
+    const old = matched.get(i)
     const id = old?.id ?? `${prefix}${counter.next++}`
     const p: Participant = { id, name }
     if (online) p.online = true
     if (code) p.code = code
     if (old?.unavailable?.length) p.unavailable = old.unavailable
+    if (!old) changes.push({ kind: 'added', id, to: name })
+    else if (old.name !== name) changes.push({ kind: 'renamed', id, from: old.name, to: name })
     return p
   })
+  for (const old of existing) if (!used.has(old.id)) changes.push({ kind: 'deleted', id: old.id, from: old.name })
+  return { people, changes, ambiguous }
 }
 
 /**

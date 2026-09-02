@@ -4,13 +4,11 @@ import { loadLocal, saveLocal } from './lib/persist'
 import { commit, initialHistory, redo, undo } from './lib/history'
 import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
-import { InterestPanel } from './components/InterestPanel'
 import { BoardPanel } from './components/BoardPanel'
 import { SchedulesPanel } from './components/SchedulesPanel'
 
 const VIEWS = [
   ['setup', 'Setup'],
-  ['interest', 'Interest'],
   ['board', 'Board'],
   ['schedules', 'Schedules'],
 ] as const
@@ -22,6 +20,8 @@ const isView = (s: string): s is View => VIEWS.some(([id]) => id === s)
 function useView(fallback: View): [View, (v: View) => void] {
   const read = () => {
     const h = location.hash.slice(1)
+    // Old bookmarks still land in the now-unified Setup workflow.
+    if (h === 'interest') return 'setup'
     return isView(h) ? h : fallback
   }
   const [view, setView] = useState<View>(read)
@@ -93,8 +93,10 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        {view === 'setup' && <SetupPanel project={project} onChange={setProject} />}
-        {view === 'interest' && <InterestPanel project={project} onChange={setProject} />}
+        {/* Keep Setup mounted so unapplied textarea edits survive visits to the board or schedules. */}
+        <div hidden={view !== 'setup'}>
+          <SetupPanel project={project} onChange={setProject} />
+        </div>
         {view === 'board' && <BoardPanel project={project} onChange={setProject} />}
         {view === 'schedules' && <SchedulesPanel project={project} />}
       </main>

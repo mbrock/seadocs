@@ -10,11 +10,13 @@
 //       0–3 scores (`dmScores`, `teamScores`)
 //   v4  interest is either/or: `dmAsks` and `teamAsks` are lists of pair keys.
 //       Any v1–v3 score above zero becomes an ask.
+//   v5  participant ids are a documented durable identity contract. Loading
+//       validates uniqueness and references instead of silently detaching data.
 
 import { pairKey, type Asks, type Participant, type PlacedMeeting, type Slot } from './scheduler'
 import { emptyProject, prune, type Project } from './project'
 
-export const FORMAT_VERSION = 4
+export const FORMAT_VERSION = 5
 export const STORAGE_KEY = 'meeting-board/project'
 
 export function serialize(project: Project): string {
@@ -32,13 +34,14 @@ export function deserialize(text: string): Project {
   if (!d.teams.every(isParticipant) || !d.dms.every(isParticipant)) {
     throw new Error('Participants are malformed')
   }
+  if (typeof d.version === 'number' && d.version > FORMAT_VERSION) throw new Error(`Project file version ${d.version} is newer than this app supports`)
   return d.version === 2 ? fromV2(d) : fromV3(d)
 }
 
-/** v3 and v4 differ only in how interest is stored. */
+/** v3–v5 differ only in interest representation and identity validation. */
 function fromV3(d: Record<string, unknown>): Project {
   const slots = Array.isArray(d.slots) ? d.slots.filter(isSlot).map(({ id, label }) => ({ id, label })) : []
-  return prune({
+  const project: Project = {
     ...emptyProject(),
     title: typeof d.title === 'string' ? d.title : '',
     teams: (d.teams as Participant[]).map(cleanParticipant),
@@ -48,7 +51,9 @@ function fromV3(d: Record<string, unknown>): Project {
     teamAsks: cleanAsks(d.teamAsks ?? d.teamScores),
     meetings: Array.isArray(d.meetings) ? d.meetings.filter(isMeeting) : [],
     nextId: Number(d.nextId) || 1,
-  })
+  }
+  if (d.version === 4 || d.version === 5) validateReferences(project)
+  return repairNextId(prune(project))
 }
 
 /** Turn a slot count and optional labels into slot entities, numbering from `nextId`. */
@@ -69,7 +74,7 @@ function fromV2(d: Record<string, unknown>): Project {
       }
     }
   }
-  return prune({
+  return repairNextId(prune({
     ...emptyProject(),
     teams: (d.teams as Participant[]).map(cleanParticipant),
     dms: (d.dms as Participant[]).map(cleanParticipant),
@@ -78,7 +83,7 @@ function fromV2(d: Record<string, unknown>): Project {
     teamAsks: cleanAsks(d.teamScores),
     meetings,
     nextId,
-  })
+  }))
 }
 
 function fromV1(d: Record<string, unknown>): Project {
@@ -103,7 +108,7 @@ function fromV1(d: Record<string, unknown>): Project {
       })
     })
   }
-  return prune({
+  return repairNextId(prune({
     ...emptyProject(),
     teams,
     dms,
@@ -112,7 +117,33 @@ function fromV1(d: Record<string, unknown>): Project {
     teamAsks: convert(d.teamScores),
     meetings,
     nextId,
-  })
+  }))
+}
+
+/** Ensure future generated ids cannot collide with ids from imported files. */
+function repairNextId(project: Project): Project {
+  const largestId = Math.max(0, ...[...project.teams, ...project.dms, ...project.slots].map(({ id }) => Number(id.match(/\d+$/)?.[0] ?? 0)))
+  return { ...project, nextId: Math.max(project.nextId, largestId + 1) }
+}
+
+/** Current-format corruption is unsafe to guess at; Open surfaces this error and keeps the current project. */
+function validateReferences(project: Project): void {
+  const all = [...project.teams, ...project.dms, ...project.slots]
+  const ids = all.map((x) => x.id)
+  if (new Set(ids).size !== ids.length) throw new Error('Project has duplicate participant or slot identities')
+  const teams = new Set(project.teams.map((p) => p.id))
+  const dms = new Set(project.dms.map((p) => p.id))
+  const slots = new Set(project.slots.map((s) => s.id))
+  const invalidPair = (key: string) => {
+    const [team, dm, extra] = key.split('|')
+    return Boolean(extra) || !teams.has(team) || !dms.has(dm)
+  }
+  if (Object.keys(project.dmAsks).some(invalidPair) || Object.keys(project.teamAsks).some(invalidPair)) {
+    throw new Error('Project has requests for missing or ambiguous participants')
+  }
+  if (project.meetings.some((m) => !teams.has(m.team) || !dms.has(m.dm) || !slots.has(m.slot))) {
+    throw new Error('Project has meetings for missing participants or slots')
+  }
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -139,7 +170,7 @@ function isMeeting(m: unknown): m is PlacedMeeting {
   return isRecord(m) && typeof m.team === 'string' && typeof m.dm === 'string' && typeof m.slot === 'string'
 }
 
-/** v4 lists pair keys; v3 mapped pair keys to scores, where anything above zero was an ask. */
+/** v4+ list pair keys; v3 mapped pair keys to scores, where anything above zero was an ask. */
 function cleanAsks(x: unknown): Asks {
   const out: Asks = {}
   if (Array.isArray(x)) {

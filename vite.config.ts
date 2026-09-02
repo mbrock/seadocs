@@ -13,6 +13,6 @@ export default defineConfig({
     allowedHosts: ['.orb.swa.sh', '.onamp.dev'],
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 })

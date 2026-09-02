@@ -31,7 +31,9 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
 
   async function open(file: File) {
     try {
-      onChange(deserialize(await file.text()))
+      const opened = deserialize(await file.text())
+      if (!isEmpty && !confirm('Replace the current project with this file? You can Undo afterwards.')) return
+      onChange(opened)
       setNote('opened ' + file.name)
     } catch (err) {
       setNote(`could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`)
