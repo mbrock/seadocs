@@ -18,7 +18,7 @@ import { availabilityOfProject, participantName, slotLabel, withAvailability, wi
 import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { AskMark, Button, Empty, Name, Panel } from './ui'
+import { Button, Empty, Name, Panel, RequestMark } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
 import { validateAdvancedBoard } from '../lib/advancedSolver'
@@ -191,11 +191,11 @@ function Grid({
       <table className="w-full border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 w-px border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-semibold whitespace-nowrap">
+            <th className="sticky top-0 left-0 z-30 h-6 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap">
               {rows === 'dm' ? 'Decision makers' : 'Teams'}
             </th>
             {project.slots.map((slot) => (
-              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-mono font-semibold">
+              <th key={slot.id} className="sticky top-0 z-20 h-6 border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-mono font-semibold">
                 {slotLabel(project, slot.id)}
               </th>
             ))}
@@ -203,7 +203,7 @@ function Grid({
         </thead>
         <tbody>
           {people.map((person) => (
-            <tr key={person.id}>
+            <tr key={person.id} className="h-6">
               <th
                 scope="row"
                 className="sticky left-0 z-10 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap"
@@ -234,8 +234,8 @@ function Grid({
                         partner && !dmAsked && !teamAsked ? 'text-muted' : ''
                       }`}
                     >
-                      {partner && <AskMark dm={dmAsked} team={teamAsked} />}
-                      {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : off ? null : <span>·</span>}
+                      {partner && <RequestMark dm={dmAsked} team={teamAsked} />}
+                      {partner && <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" />}
                       {(repeat || (off && partner)) && (
                         <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
                           {repeat ? '×2' : '!'}
@@ -317,7 +317,7 @@ function Inspector({
       case 'swap':
         return (
           <>
-            swap · {code(e.displaced)} gets {code(e.second[other])} <AskMark {...asksFor(e.second.team, e.second.dm)} />
+            swap · {code(e.displaced)} gets {code(e.second[other])} <RequestMark {...asksFor(e.second.team, e.second.dm)} />
           </>
         )
       case 'repeat':
@@ -360,7 +360,7 @@ function Inspector({
                   <div className="eyebrow">Meets</div>
                   <div className="truncate font-semibold">{participantName(project, current)}</div>
                   <div className="flex items-center gap-1.5 text-muted">
-                    <AskMark dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
+                    <RequestMark dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
                   </div>
                 </div>
                 <Button onClick={() => assign(null)} title="Take this meeting off the board">
@@ -438,7 +438,7 @@ function CandidateList({
                 {effectLine(r.effect)} · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
               </span>
             </span>
-            <AskMark dm={r.dmAsked} team={r.teamAsked} />
+            <RequestMark dm={r.dmAsked} team={r.teamAsked} />
           </button>
         </li>
       ))}

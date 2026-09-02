@@ -8,7 +8,7 @@ type Variant = 'primary' | 'default' | 'quiet'
 const buttonStyles: Record<Variant, string> = {
   primary: 'px-2 py-1 bg-ink text-paper hover:bg-accent disabled:hover:bg-ink',
   default: 'px-2 py-1 border border-rule bg-paper hover:border-ink disabled:hover:border-rule',
-  quiet: 'px-1 py-0.5 text-muted hover:text-ink hover:underline',
+  quiet: 'px-1 py-0 text-muted hover:text-ink hover:underline',
 }
 
 export function Button({ variant = 'default', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
@@ -29,16 +29,39 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="px-2 py-3 text-center text-muted">{children}</p>
 }
 
-/** One square: green for a DM ask, blue for a team ask, and diagonally split for both. */
-export function AskMark({ dm, team }: { dm: boolean; team: boolean }) {
+/** The shared request square, optionally showing fulfillment with a check. */
+export function RequestMark({
+  dm,
+  team,
+  fulfilled = false,
+  showEmpty = false,
+  className = '',
+}: {
+  dm: boolean
+  team: boolean
+  fulfilled?: boolean
+  showEmpty?: boolean
+  className?: string
+}) {
+  const requested = dm || team
   const both = dm && team
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ${both ? '' : dm ? 'bg-emerald-600' : team ? 'bg-sea-3' : 'invisible'}`}
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[2px] border text-white ${
+        requested
+          ? `border-transparent ${both ? '' : dm ? 'bg-emerald-600' : 'bg-sea-3'}`
+          : showEmpty ? 'border-rule bg-paper' : 'invisible border-transparent'
+      } ${className}`}
       style={both ? { background: 'linear-gradient(135deg, var(--color-emerald-600) 0 50%, var(--color-sea-3) 50% 100%)' } : undefined}
       title={askedBy(dm, team)}
       aria-label={askedBy(dm, team)}
-    />
+    >
+      {fulfilled && (
+        <svg data-fulfillment-check aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
+          <path d="M3 8.5 6.5 12 13 4" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
   )
 }
 
@@ -68,11 +91,7 @@ export function Name({
   )
 }
 
-/** Small-caps style label, e.g. a country code after a name. */
+/** Country code shown as ordinary inline text before a name. */
 function Tag({ children }: { children: ReactNode }) {
-  return (
-    <span className="mr-1 shrink-0 self-center rounded-[2px] border border-current/30 px-[3px] leading-[1.4] font-bold tracking-[0.08em] text-current opacity-70">
-      {children}
-    </span>
-  )
+  return <span className="mr-1 shrink-0 opacity-70">{children}</span>
 }

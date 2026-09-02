@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { asked, pairKey, type Participant } from '../lib/scheduler'
 import { parseRoster, prune, rosterText, withAsk, type AskKind, type Project } from '../lib/project'
-import { Button, Name } from './ui'
+import { Button, Name, RequestMark } from './ui'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
 
@@ -131,8 +131,8 @@ function RequestMatrix({
           </thead>
           <tbody className="outline outline-1 outline-rule">
             {rows.map((person, rowIndex) => (
-              <tr key={person.id} className="group">
-                <th className="sticky left-0 z-10 w-px border-l border-b border-rule bg-paper px-2 py-1 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
+              <tr key={person.id} className="group h-6">
+                <th className="sticky left-0 z-10 w-px border-l border-b border-rule bg-paper px-2 py-0 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
                   <EditableParticipant
                     person={person}
                     display={names.get(person.id)}
@@ -150,7 +150,7 @@ function RequestMatrix({
                   const fulfilled = requested && !generating && scheduled.has(pairKey(team, dm))
                   const description = `${kind === 'dm' ? 'DM' : 'Team'} request: ${person.name} asks for ${column.name}`
                   return (
-                    <td key={column.id} className="border-l border-b border-rule/70 px-1.5 py-1 group-hover:bg-canvas/50">
+                    <td key={column.id} className="border-l border-b border-rule/70 p-0 group-hover:bg-canvas/50">
                       <button
                         type="button"
                         role="checkbox"
@@ -158,28 +158,26 @@ function RequestMatrix({
                         aria-label={description}
                         title={`${description} · ${requested ? fulfilled ? 'scheduled' : 'not scheduled' : 'not requested'}`}
                         onClick={() => onChange((current) => withAsk(current, kind, team, dm, !requested))}
-                        className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[2px] border text-white hover:outline hover:outline-ink ${
-                          requested
-                            ? kind === 'dm' ? 'border-emerald-600 bg-emerald-600' : 'border-sea-3 bg-sea-3'
-                            : 'border-rule bg-paper'
-                        } ${requested && !fulfilled ? 'opacity-45' : ''}`}
+                        className="flex h-6 w-full cursor-pointer items-center justify-center hover:outline hover:outline-ink"
                       >
-                        {fulfilled && (
-                          <svg data-fulfillment-check aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
-                            <path d="M3 8.5 6.5 12 13 4" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
+                        <RequestMark
+                          dm={kind === 'dm' && requested}
+                          team={kind === 'team' && requested}
+                          fulfilled={fulfilled}
+                          showEmpty
+                          className={requested && !fulfilled ? 'opacity-45' : ''}
+                        />
                       </button>
                     </td>
                   )
                 })}
               </tr>
             ))}
-            <tr>
-              <td className="sticky left-0 z-10 bg-paper px-2 py-1">
+            <tr className="h-[calc(1.5rem+1px)]">
+              <td className="sticky left-0 z-10 border-b border-rule bg-paper px-2 py-0">
                 <Button variant="quiet" onClick={onAdd}>{addLabel}</Button>
               </td>
-              <td colSpan={Math.max(1, columns.length)} />
+              <td className="border-b border-rule" colSpan={Math.max(1, columns.length)} />
             </tr>
           </tbody>
         </table>
@@ -207,7 +205,7 @@ function EditableParticipant({
 }) {
   const value = rosterText([person])
   return (
-    <div className="relative flex items-center gap-0.5">
+    <div className="relative flex h-6 items-center gap-0.5">
       <input
         aria-label={label}
         className={`peer absolute inset-y-0 left-0 right-3 z-10 min-w-0 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${value ? 'text-transparent' : 'text-muted'}`}
