@@ -103,11 +103,11 @@ currently rendered as readable `[CP-SAT]` progress lines in the browser console.
 
 Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at
-least one meeting, and team requests. Each proven optimum or time-limited
-incumbent value becomes the next stage's constraint. Phase B rebuilds the full
-selectable pair × slot model with DM internal-gap variables, then minimizes DM
-gaps, retains useful extra meetings, and finally favors unchanged current-board
-cells. It does not freeze Phase A pair choices. Because the present project
+least one meeting, team requests, and total meetings. Each proven optimum or
+time-limited incumbent value becomes the next stage's constraint. Phase B
+rebuilds the full selectable pair × slot model with DM internal-gap variables,
+then minimizes DM gaps and finally favors unchanged current-board cells. It
+does not freeze Phase A pair choices. Because the present project
 format has binary asks but no explicit filler consent or per-DM cap, generation
 allows at most one meeting per DM that the DM did not request; this
 is the deliberately conservative burden guardrail for team-only and filler

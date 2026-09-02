@@ -189,11 +189,11 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
   run(a, 'DM requests', 'dmRequested', 'max', 2, limit())
   run(a, 'teams served', 'teamsServed', 'max', 3, limit())
   run(a, 'team requests', 'teamRequested', 'max', 4, limit())
+  run(a, 'total meetings', 'total', 'max', 5, limit())
 
-  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 4, totalPhases: 7 })
+  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 5, totalPhases: 7 })
   const b = buildModel(api, input, true, floors, incumbent)
-  run(b, 'DM gaps', 'dmGaps', 'min', 5, limit(2))
-  run(b, 'total meetings', 'total', 'max', 6, limit())
+  run(b, 'DM gaps', 'dmGaps', 'min', 6, limit(2))
   run(b, 'stability', 'stable', 'max', 7, limit())
 
   const runtimeMs = performance.now() - started
