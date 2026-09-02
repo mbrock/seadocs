@@ -42,6 +42,29 @@ export interface SolveResponse {
   result: AdvancedSolverResult
 }
 
+export interface SolverStatusInfo {
+  state: 'loading' | 'initializing' | 'building' | 'phase-started' | 'incumbent' | 'phase-complete' | 'complete' | 'failed'
+  elapsedMs: number
+  mode?: 'quick' | 'optimal'
+  phase?: SolverPhase['name']
+  phaseIndex?: number
+  totalPhases?: number
+  objectiveValue?: number
+  bestObjectiveBound?: number
+  solverWallTime?: number
+  direction?: 'maximize' | 'minimize'
+  timeLimitSeconds?: number
+  result?: SolverPhase
+  resultKind?: AdvancedResultKind
+  message?: string
+}
+
+export interface SolveStatusResponse {
+  type: 'status'
+  runId: number
+  status: SolverStatusInfo
+}
+
 /** Independent ordinary-TypeScript validation; no solver state is trusted. */
 export function validateAdvancedBoard(input: ScheduleInput, meetings: PlacedMeeting[]): string[] {
   const errors: string[] = []
@@ -93,4 +116,10 @@ export function isSolveResponse(value: unknown): value is SolveResponse {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<SolveResponse>
   return v.type === 'result' && Number.isInteger(v.runId) && !!v.result && typeof v.result === 'object'
+}
+
+export function isSolveStatusResponse(value: unknown): value is SolveStatusResponse {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Partial<SolveStatusResponse>
+  return v.type === 'status' && Number.isInteger(v.runId) && !!v.status && typeof v.status === 'object' && typeof v.status.state === 'string'
 }

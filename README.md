@@ -97,6 +97,9 @@ team × decision-maker pair meets **and** its slot together, so availability,
 one meeting per person per slot, and pair uniqueness are hard constraints
 rather than assumptions made before placement. Every returned board is checked
 again by ordinary TypeScript before it can replace the board on screen.
+While solving, the Worker sends structured loading, model-building, stage,
+incumbent, bound and completion status objects to the main thread; these are
+currently logged as `[CP-SAT status]` entries in the browser console.
 
 Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at

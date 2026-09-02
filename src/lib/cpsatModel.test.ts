@@ -57,10 +57,13 @@ describe('integrated CP-SAT model', () => {
       teams: [participant('t1'), participant('t2')], dms: [participant('d1')], slots: numberedSlots(1),
       dmAsks: { 't1|d1': true, 't2|d1': true } as const, teamAsks: { 't1|d1': true } as const,
     }
-    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], proveOptimal: true })
+    const statuses: import('./advancedSolver').SolverStatusInfo[] = []
+    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], proveOptimal: true }, (status) => statuses.push(status))
     expect(result.kind).toBe('optimal')
     expect(result.phases.every((phase) => phase.status === 'optimal')).toBe(true)
     expect(result.meetings).toEqual([{ team: 't1', dm: 'd1', slot: 's1' }])
+    expect(statuses.filter((status) => status.state === 'phase-started').map((status) => status.phase)).toEqual(result.phases.map((phase) => phase.name))
+    expect(statuses.at(-1)).toMatchObject({ state: 'complete', resultKind: 'optimal', totalPhases: 7 })
   })
 
   test('solves the deterministic 13×17 sample at normal event scale', async () => {

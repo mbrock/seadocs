@@ -1,5 +1,5 @@
 import type { BoolVar, CpModel, CpSolver, CpSolverResult, IntVar, LinearExpr } from 'cpsat-js/portable'
-import { advancedMetrics, validateAdvancedBoard, ADVANCED_POLICY_VERSION, type AdvancedSolverInput, type AdvancedSolverResult, type SolverPhase } from './advancedSolver'
+import { advancedMetrics, validateAdvancedBoard, ADVANCED_POLICY_VERSION, type AdvancedSolverInput, type AdvancedSolverResult, type SolverPhase, type SolverStatusInfo } from './advancedSolver'
 import { availabilityOf, pairKey, type PlacedMeeting } from './scheduler'
 
 type Api = typeof import('cpsat-js/portable')
@@ -132,7 +132,7 @@ function decode(input: AdvancedSolverInput, state: ModelState, result: CpSolverR
   return out
 }
 
-export async function solveWithCpSat(api: Api, input: AdvancedSolverInput): Promise<AdvancedSolverResult> {
+export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onStatus: (status: SolverStatusInfo) => void = () => {}): Promise<AdvancedSolverResult> {
   const started = performance.now()
   const solver: CpSolver = await api.CpSolver.create()
   const phases: SolverPhase[] = []
@@ -142,10 +142,24 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput): Prom
   let hasSolverIncumbent = false
   let allOptimal = true
 
-  const run = (state: ModelState, name: SolverPhase['name'], metric: keyof ModelState['metrics'], direction: Direction, seconds?: number) => {
+  const run = (state: ModelState, name: SolverPhase['name'], metric: keyof ModelState['metrics'], direction: Direction, phaseIndex: number, seconds?: number) => {
+    const progress = (status: Omit<SolverStatusInfo, 'elapsedMs'>) => onStatus({ ...status, elapsedMs: Math.round(performance.now() - started) })
+    progress({ state: 'phase-started', phase: name, phaseIndex, totalPhases: 7, direction: direction === 'max' ? 'maximize' : 'minimize', ...(seconds === undefined ? {} : { timeLimitSeconds: seconds }) })
     if (direction === 'max') state.model.maximize(state.metrics[metric])
     else state.model.minimize(state.metrics[metric])
-    const result = solver.solve(state.model, { ...(seconds === undefined ? {} : { maxTimeInSeconds: seconds }), numWorkers: 1 })
+    const result = solver.solve(state.model, {
+      ...(seconds === undefined ? {} : { maxTimeInSeconds: seconds }),
+      numWorkers: 1,
+      onSolution: (solution) => progress({
+        state: 'incumbent',
+        phase: name,
+        phaseIndex,
+        totalPhases: 7,
+        objectiveValue: Math.round(solution.objectiveValue),
+        bestObjectiveBound: Math.round(solution.bestObjectiveBound),
+        solverWallTime: solution.wallTime,
+      }),
+    })
     const status = solutionStatus(api, result)
     const phase: SolverPhase = { name, status }
     if (status !== 'no incumbent') {
@@ -162,31 +176,38 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput): Prom
     } else allOptimal = false
     if (status !== 'optimal') allOptimal = false
     phases.push(phase)
+    progress({ state: 'phase-complete', phase: name, phaseIndex, totalPhases: 7, result: phase })
   }
 
+  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 0, totalPhases: 7 })
   const a = buildModel(api, input, false, floors, incumbent)
   // Portable CP-SAT needs enough time to get through first-solve startup even
   // on tiny fixtures; later stages usually prove before their limit.
   const short = Math.max(0.15, budget / 1000 / 9)
   const limit = (multiple = 1) => input.proveOptimal ? undefined : short * multiple
-  run(a, 'mutual requests', 'mutual', 'max', limit())
-  run(a, 'DM requests', 'dmRequested', 'max', limit())
-  run(a, 'teams served', 'teamsServed', 'max', limit())
-  run(a, 'team requests', 'teamRequested', 'max', limit())
+  run(a, 'mutual requests', 'mutual', 'max', 1, limit())
+  run(a, 'DM requests', 'dmRequested', 'max', 2, limit())
+  run(a, 'teams served', 'teamsServed', 'max', 3, limit())
+  run(a, 'team requests', 'teamRequested', 'max', 4, limit())
 
+  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 4, totalPhases: 7 })
   const b = buildModel(api, input, true, floors, incumbent)
-  run(b, 'DM gaps', 'dmGaps', 'min', limit(2))
-  run(b, 'total meetings', 'total', 'max', limit())
-  run(b, 'stability', 'stable', 'max', limit())
+  run(b, 'DM gaps', 'dmGaps', 'min', 5, limit(2))
+  run(b, 'total meetings', 'total', 'max', 6, limit())
+  run(b, 'stability', 'stable', 'max', 7, limit())
 
   const runtimeMs = performance.now() - started
   if (!hasSolverIncumbent && !incumbent.length && input.teams.length && input.dms.length && Object.keys(input.dmAsks).length + Object.keys(input.teamAsks).length > 0) {
-    return { kind: 'failed', phases, runtimeMs, message: input.proveOptimal ? 'No valid CP-SAT solution was found.' : 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
+    const result: AdvancedSolverResult = { kind: 'failed', phases, runtimeMs, message: input.proveOptimal ? 'No valid CP-SAT solution was found.' : 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
+    onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: 7, resultKind: result.kind, message: result.message })
+    return result
   }
   // Recompute metrics independently as a final read of the board; this also
   // makes accidental protocol/model drift visible in tests and diagnostics.
   advancedMetrics(input, incumbent)
-  return { kind: allOptimal ? 'optimal' : 'feasible', meetings: incumbent, phases, runtimeMs, solver: solverInfo() }
+  const result: AdvancedSolverResult = { kind: allOptimal ? 'optimal' : 'feasible', meetings: incumbent, phases, runtimeMs, solver: solverInfo() }
+  onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: 7, resultKind: result.kind })
+  return result
 }
 
 const solverInfo = () => ({ package: 'cpsat-js' as const, version: '1.3.0' as const, variant: 'portable' as const, policy: ADVANCED_POLICY_VERSION })

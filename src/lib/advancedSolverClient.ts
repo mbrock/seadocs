@@ -1,4 +1,4 @@
-import { isSolveResponse, type AdvancedSolverInput, type AdvancedSolverResult, type SolveRequest } from './advancedSolver'
+import { isSolveResponse, isSolveStatusResponse, type AdvancedSolverInput, type AdvancedSolverResult, type SolveRequest } from './advancedSolver'
 
 export interface WorkerLike {
   postMessage(message: SolveRequest): void
@@ -29,7 +29,12 @@ export function startAdvancedSolve(
     worker.terminate()
   }
   worker.onmessage = (event) => {
-    if (!active || !isSolveResponse(event.data) || event.data.runId !== runId) return
+    if (!active) return
+    if (isSolveStatusResponse(event.data) && event.data.runId === runId) {
+      console.info('[CP-SAT status]', event.data.status)
+      return
+    }
+    if (!isSolveResponse(event.data) || event.data.runId !== runId) return
     finish()
     onResult(event.data.result)
   }

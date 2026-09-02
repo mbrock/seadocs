@@ -14,6 +14,18 @@ class FakeWorker implements WorkerLike {
 }
 
 describe('advanced worker client', () => {
+  test('logs status objects without completing the run', () => {
+    const worker = new FakeWorker()
+    const result = vi.fn()
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    startAdvancedSolve(input, result, vi.fn(), () => worker)
+    worker.onmessage!({ data: { type: 'status', runId: worker.sent!.runId, status: { state: 'phase-started', elapsedMs: 10, phase: 'DM requests' } } } as MessageEvent)
+    expect(log).toHaveBeenCalledWith('[CP-SAT status]', { state: 'phase-started', elapsedMs: 10, phase: 'DM requests' })
+    expect(result).not.toHaveBeenCalled()
+    expect(worker.terminated).toBe(false)
+    log.mockRestore()
+  })
+
   test('sends a versioned run, accepts its response, and terminates', () => {
     const worker = new FakeWorker()
     const result = vi.fn()
