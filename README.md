@@ -37,9 +37,12 @@ save / open / new, and shows a problem count when the board has one.
   (placed if there's room).
 - **Board** — *Generate* runs the local CP-SAT solver and puts its board on
   screen. **Quick** returns a validated incumbent in about three seconds;
-  **Prove optimal** runs without a time limit until every objective stage is
-  proven, and can be cancelled at any time. The current board stays visible
-  while either mode runs. Rows are decision makers (or teams),
+  **Thorough** gives each of the seven objective stages up to one second. Either
+  mode may finish `OPTIMAL` when every stage is proven in time, or `FEASIBLE`
+  with the best validated incumbent otherwise, and can be cancelled at any
+  time. A compact progress display shows the current stage, incumbent, bound,
+  and elapsed time. The current board stays visible while either mode runs.
+  Rows are decision makers (or teams),
   columns are slots; the key in the panel header explains the cells: gold
   means the decision maker asked for this meeting, the blue bar at a cell's
   right edge means the team asked, a white cell with a name is a meeting
@@ -99,7 +102,8 @@ rather than assumptions made before placement. Every returned board is checked
 again by ordinary TypeScript before it can replace the board on screen.
 While solving, the Worker sends structured loading, model-building, stage,
 incumbent, bound and completion status objects to the main thread; these are
-currently rendered as readable `[CP-SAT]` progress lines in the browser console.
+rendered in a compact progress display and as readable `[CP-SAT]` lines in the
+browser console.
 
 Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at

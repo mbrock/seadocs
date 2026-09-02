@@ -52,13 +52,13 @@ describe('integrated CP-SAT model', () => {
     expect(result.kind === 'optimal').toBe(result.phases.every((p) => p.status === 'optimal'))
   })
 
-  test('prove-optimal mode runs every stage without a cutoff', async () => {
+  test('thorough mode gives every stage the same one-second limit', async () => {
     const input = {
       teams: [participant('t1'), participant('t2')], dms: [participant('d1')], slots: numberedSlots(1),
       dmAsks: { 't1|d1': true, 't2|d1': true } as const, teamAsks: { 't1|d1': true } as const,
     }
     const statuses: import('./advancedSolver').SolverStatusInfo[] = []
-    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], proveOptimal: true }, (status) => statuses.push(status))
+    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], stageTimeMs: 1000 }, (status) => statuses.push(status))
     expect(result.kind).toBe('optimal')
     expect(result.phases.every((phase) => phase.status === 'optimal')).toBe(true)
     expect(result.phases.map((phase) => phase.name)).toEqual([
@@ -71,7 +71,9 @@ describe('integrated CP-SAT model', () => {
       'stability',
     ])
     expect(result.meetings).toEqual([{ team: 't1', dm: 'd1', slot: 's1' }])
-    expect(statuses.filter((status) => status.state === 'phase-started').map((status) => status.phase)).toEqual(result.phases.map((phase) => phase.name))
+    const starts = statuses.filter((status) => status.state === 'phase-started')
+    expect(starts.map((status) => status.phase)).toEqual(result.phases.map((phase) => phase.name))
+    expect(starts.every((status) => status.timeLimitSeconds === 1)).toBe(true)
     expect(statuses.at(-1)).toMatchObject({ state: 'complete', resultKind: 'optimal', totalPhases: 7 })
   })
 

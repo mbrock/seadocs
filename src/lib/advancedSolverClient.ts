@@ -15,7 +15,7 @@ const defaultWorkerFactory: WorkerFactory = () =>
 let nextRunId = 1
 
 const seconds = (milliseconds: number) => `${(milliseconds / 1000).toFixed(milliseconds < 10_000 ? 2 : 1)}s`
-const modeName = (status: SolverStatusInfo) => status.mode === 'optimal' ? 'Prove optimal' : status.mode === 'quick' ? 'Quick' : 'CP-SAT'
+const modeName = (status: SolverStatusInfo) => status.mode === 'thorough' ? 'Thorough' : status.mode === 'quick' ? 'Quick' : 'CP-SAT'
 const phaseName = (status: SolverStatusInfo) => status.phase ? `${status.phaseIndex ?? '?'}/${status.totalPhases ?? 7} ${status.phase}` : 'solver'
 const valueAndBound = (value?: number, bound?: number, valueLabel = 'value') =>
   [value === undefined ? '' : `${valueLabel} ${value}`, bound === undefined ? '' : `best possible bound ${bound}`].filter(Boolean).join(' · ')
@@ -59,6 +59,7 @@ export function startAdvancedSolve(
   input: AdvancedSolverInput,
   onResult: (result: AdvancedSolverResult) => void,
   onError: (message: string) => void,
+  onStatus: (status: SolverStatusInfo) => void = () => {},
   createWorker: WorkerFactory = defaultWorkerFactory,
 ): () => void {
   const worker = createWorker()
@@ -72,6 +73,7 @@ export function startAdvancedSolve(
     if (!active) return
     if (isSolveStatusResponse(event.data) && event.data.runId === runId) {
       console.info(formatSolverStatus(event.data.status))
+      onStatus(event.data.status)
       return
     }
     if (!isSolveResponse(event.data) || event.data.runId !== runId) return

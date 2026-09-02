@@ -184,7 +184,7 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
   // Portable CP-SAT needs enough time to get through first-solve startup even
   // on tiny fixtures; later stages usually prove before their limit.
   const short = Math.max(0.15, budget / 1000 / 9)
-  const limit = (multiple = 1) => input.proveOptimal ? undefined : short * multiple
+  const limit = (multiple = 1) => input.stageTimeMs === undefined ? short * multiple : input.stageTimeMs / 1000
   run(a, 'mutual requests', 'mutual', 'max', 1, limit())
   run(a, 'DM requests', 'dmRequested', 'max', 2, limit())
   run(a, 'teams served', 'teamsServed', 'max', 3, limit())
@@ -198,7 +198,7 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
 
   const runtimeMs = performance.now() - started
   if (!hasSolverIncumbent && !incumbent.length && input.teams.length && input.dms.length && Object.keys(input.dmAsks).length + Object.keys(input.teamAsks).length > 0) {
-    const result: AdvancedSolverResult = { kind: 'failed', phases, runtimeMs, message: input.proveOptimal ? 'No valid CP-SAT solution was found.' : 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
+    const result: AdvancedSolverResult = { kind: 'failed', phases, runtimeMs, message: 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
     onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: 7, resultKind: result.kind, message: result.message })
     return result
   }

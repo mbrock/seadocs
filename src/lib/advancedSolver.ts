@@ -5,10 +5,10 @@ export const ADVANCED_POLICY_VERSION = 'local-cpsat-v1'
 export interface AdvancedSolverInput extends ScheduleInput {
   /** The board on screen is a stability target, never an implicit lock. */
   currentBoard: PlacedMeeting[]
-  /** A valid board from the fast JavaScript scheduler, used only as a search hint. */
+  /** A valid board from the legacy JavaScript scheduler, used only as a search hint. */
   fallbackHint: PlacedMeeting[]
-  /** Omit all wall-clock limits and solve every objective stage to proof. */
-  proveOptimal?: boolean
+  /** When set, give every objective stage this much time instead of splitting maxTimeMs. */
+  stageTimeMs?: number
   maxTimeMs?: number
 }
 
@@ -45,7 +45,7 @@ export interface SolveResponse {
 export interface SolverStatusInfo {
   state: 'loading' | 'initializing' | 'building' | 'phase-started' | 'incumbent' | 'phase-complete' | 'complete' | 'failed'
   elapsedMs: number
-  mode?: 'quick' | 'optimal'
+  mode?: 'quick' | 'thorough'
   phase?: SolverPhase['name']
   phaseIndex?: number
   totalPhases?: number

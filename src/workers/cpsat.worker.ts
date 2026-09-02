@@ -9,7 +9,7 @@ self.onmessage = async (event: MessageEvent<SolveRequest>) => {
   if (request?.type !== 'solve') return
   const started = performance.now()
   const status = (info: SolverStatusInfo) => {
-    const response: SolveStatusResponse = { type: 'status', runId: request.runId, status: { mode: request.input.proveOptimal ? 'optimal' : 'quick', ...info } }
+    const response: SolveStatusResponse = { type: 'status', runId: request.runId, status: { mode: request.input.stageTimeMs === undefined ? 'quick' : 'thorough', ...info } }
     self.postMessage(response)
   }
   try {
