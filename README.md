@@ -11,9 +11,9 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-The app has two views, reached from the header bar (the view is in the URL
-hash, so links and back/forward work). The same bar holds undo / redo and
-save / open / new, and shows a problem count when the board has one.
+Setup and the generated board share one page. The header bar holds undo / redo
+and save / open / new, and shows a problem count linking to the board when it
+has one.
 
 - **Setup** — one editable matrix: film teams are rows, decision makers are
   columns, and every cell contains both sides' requests. Editing a row or column
@@ -141,7 +141,7 @@ path, so it works under a project path like `/seadocs/` without configuration.
 index.html                 Vite entry
 src/main.tsx               mounts <App/>
 src/index.css              Tailwind + Public Sans import and the colour/font theme
-src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
+src/App.tsx                page layout, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, AskPair, ask tints
 src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
 src/components/SetupPanel.tsx    editable participant/request matrix, day settings and sample loader

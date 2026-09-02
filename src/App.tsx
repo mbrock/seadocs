@@ -6,31 +6,6 @@ import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
 import { BoardPanel } from './components/BoardPanel'
 
-const VIEWS = [
-  ['setup', 'Setup'],
-  ['board', 'Board'],
-] as const
-type View = (typeof VIEWS)[number][0]
-
-const isView = (s: string): s is View => VIEWS.some(([id]) => id === s)
-
-/** The view lives in the URL hash so reload and back/forward keep it. */
-function useView(fallback: View): [View, (v: View) => void] {
-  const read = () => {
-    const h = location.hash.slice(1)
-    // Old bookmarks still land in the now-unified Setup workflow.
-    if (h === 'interest') return 'setup'
-    return isView(h) ? h : fallback
-  }
-  const [view, setView] = useState<View>(read)
-  useEffect(() => {
-    const onChange = () => setView(read())
-    window.addEventListener('hashchange', onChange)
-    return () => window.removeEventListener('hashchange', onChange)
-  })
-  return [view, (v) => (location.hash = v)]
-}
-
 export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadLocal() ?? emptyProject()))
   const project = history.present
@@ -38,7 +13,6 @@ export default function App() {
     (action) => setHistory((h) => commit(h, typeof action === 'function' ? action(h.present) : action)),
     [],
   )
-  const [view, setView] = useView(project.meetings.length ? 'board' : 'setup')
 
   useEffect(() => saveLocal(project), [project])
 
@@ -59,24 +33,6 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-rule bg-canvas print:hidden">
         <div className="wrap flex flex-wrap items-center gap-x-5 gap-y-1 py-1.5">
           <span className="text-[0.85rem] font-extrabold tracking-[-0.02em] whitespace-nowrap">Meeting Board</span>
-          <nav aria-label="Views" className="flex gap-1 overflow-x-auto">
-            {VIEWS.map(([id, label]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                aria-current={view === id ? 'page' : undefined}
-                onClick={(e) => {
-                  e.preventDefault()
-                  setView(id)
-                }}
-                className={`rounded-[3px] px-2 py-0.5 text-[0.85rem] font-semibold whitespace-nowrap ${
-                  view === id ? 'bg-ink text-paper' : 'text-muted hover:bg-paper hover:text-ink'
-                }`}
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
           <div className="ml-auto">
             <Toolbar
               project={project}
@@ -91,11 +47,12 @@ export default function App() {
       </header>
 
       <main className="wrap flex-1 py-3 print:p-0">
-        {/* Keep Setup mounted so unapplied edits survive visits to the board. */}
-        <div hidden={view !== 'setup'}>
+        <div className="flex flex-col gap-3">
           <SetupPanel project={project} onChange={setProject} />
+          <section id="board" className="scroll-mt-12">
+            <BoardPanel project={project} onChange={setProject} />
+          </section>
         </div>
-        {view === 'board' && <BoardPanel project={project} onChange={setProject} />}
       </main>
 
       <footer className="wrap border-t border-rule py-3 text-[0.8rem] text-muted print:hidden">
