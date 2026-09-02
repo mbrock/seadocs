@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { availabilityOfProject, emptyProject, withAsks, type Project } from '../lib/project'
 import { clearLocal, deserialize, serialize } from '../lib/persist'
 import { findIssues } from '../lib/scheduler'
 import { boardCsv, download } from '../lib/csv'
 import { sampleProject } from '../lib/sample'
 import { Button } from './ui'
+import type { SolverStatusInfo } from '../lib/advancedSolver'
 
 interface Props {
   project: Project
@@ -13,7 +14,7 @@ interface Props {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
-  generating: boolean
+  solverStatus: SolverStatusInfo | null
 }
 
 /**
@@ -21,7 +22,7 @@ interface Props {
  * Everything is saved in the browser as you go; the file buttons are for
  * moving the project elsewhere. Problems on the board (repeats, double bookings) show up here too.
  */
-export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, generating }: Props) {
+export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, solverStatus }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState('')
   const issues = useMemo(() => findIssues(project.meetings, availabilityOfProject(project)).length, [project])
@@ -59,14 +60,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, g
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
-      <span
-        role={generating ? 'progressbar' : undefined}
-        aria-label={generating ? 'Building schedule' : undefined}
-        aria-hidden={!generating}
-        className={`mr-2 h-1 w-16 overflow-hidden rounded-full bg-rule ${generating ? 'visible' : 'invisible'}`}
-      >
-        <span className="scheduling-progress block h-full w-1/3 rounded-full bg-accent" />
-      </span>
+      <SolverProgress status={solverStatus} />
       {issues > 0 && (
         <a href="#board" className="mr-2 rounded-[2px] bg-warn px-1.5 font-semibold text-paper">
           {issues} problem{issues === 1 ? '' : 's'}
@@ -121,5 +115,36 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, g
         }}
       />
     </div>
+  )
+}
+
+function SolverProgress({ status }: { status: SolverStatusInfo | null }) {
+  const total = status?.totalPhases ?? 7
+  const phase = status?.phaseIndex ?? 0
+  const runningPhase = status?.state === 'phase-started' || status?.state === 'incumbent'
+  const limit = status?.timeLimitSeconds ?? 1
+  const elapsed = status?.state === 'incumbent' ? (status.solverWallTime ?? 0) : 0
+  const from = ((Math.max(0, phase - 1) + Math.min(1, elapsed / limit)) / total) * 100
+  const to = (phase / total) * 100
+  const value = status?.state === 'phase-complete' || status?.state === 'building' ? to : from
+  const label = status?.phase ? `${phase}/${total} · ${status.phase}` : 'Preparing solver'
+  const style = runningPhase
+    ? ({ '--progress-from': `${from}%`, '--progress-to': `${to}%`, '--progress-duration': `${Math.max(0, limit - elapsed)}s` } as CSSProperties)
+    : { width: `${value}%` }
+
+  return (
+    <span
+      role={status ? 'progressbar' : undefined}
+      aria-label={status ? 'Building schedule' : undefined}
+      aria-valuemin={status ? 0 : undefined}
+      aria-valuemax={status ? total : undefined}
+      aria-valuenow={status ? Math.min(phase, total) : undefined}
+      aria-valuetext={status ? label : undefined}
+      aria-hidden={!status}
+      title={status ? label : undefined}
+      className={`mr-2 h-1 w-20 overflow-hidden rounded-full bg-rule ${status ? 'visible' : 'invisible'}`}
+    >
+      <span key={`${phase}-${status?.state}-${elapsed}`} className={`block h-full bg-accent ${runningPhase ? 'scheduling-progress' : ''}`} style={style} />
+    </span>
   )
 }

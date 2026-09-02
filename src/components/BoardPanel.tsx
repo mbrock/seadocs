@@ -21,13 +21,13 @@ import type { DisplayName } from '../lib/names'
 import { Button, Empty, Name, Panel, RequestMark } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
-import { validateAdvancedBoard } from '../lib/advancedSolver'
+import { validateAdvancedBoard, type SolverStatusInfo } from '../lib/advancedSolver'
 
 interface Props {
   project: Project
   onChange: Dispatch<SetStateAction<Project>>
   onGeneratedMeetings: (meetings: PlacedMeeting[]) => void
-  onGeneratingChange: (generating: boolean) => void
+  onSolverStatusChange: (status: SolverStatusInfo | null) => void
 }
 
 /** A board cell: one slot for one participant on the `side` shown down the left. */
@@ -44,7 +44,7 @@ interface BoardData {
   available: Availability
 }
 
-export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratingChange }: Props) {
+export function BoardPanel({ project, onChange, onGeneratedMeetings, onSolverStatusChange }: Props) {
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const hasBoard = project.meetings.length > 0
   const [cell, setCell] = useState<Cell | null>(null)
@@ -85,17 +85,17 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
   const startSolve = useEffectEvent(() => {
     if (!hasPeople || !hasRequests) {
       if (project.meetings.length) onGeneratedMeetings([])
-      onGeneratingChange(false)
+      onSolverStatusChange(null)
       return
     }
 
     const input = { teams, dms, dmAsks, teamAsks, slots }
     let active = true
-    onGeneratingChange(true)
+    onSolverStatusChange({ state: 'loading', elapsedMs: 0, totalPhases: 7 })
     const finishWithFallback = (reason: string) => {
       if (!active) return
       onGeneratedMeetings(fallbackHint)
-      onGeneratingChange(false)
+      onSolverStatusChange(null)
       console.warn(`[CP-SAT] fallback schedule used · ${reason}`)
     }
     const cancel = startAdvancedSolve(
@@ -116,9 +116,10 @@ export function BoardPanel({ project, onChange, onGeneratedMeetings, onGeneratin
           return
         }
         onGeneratedMeetings(result.meetings)
-        onGeneratingChange(false)
+        onSolverStatusChange(null)
       },
       finishWithFallback,
+      onSolverStatusChange,
     )
     return () => {
       active = false
@@ -176,11 +177,9 @@ function Grid({
   const { project, names, index, available } = board
   const header = (rows: Side) => (
     <tr>
-      <th className="sticky top-0 left-0 z-30 h-6 w-px bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap">
-        {rows === 'dm' ? 'Decision makers' : 'Teams'}
-      </th>
+      <th aria-label={rows === 'dm' ? 'Decision makers' : 'Teams'} className="sticky top-0 left-0 z-30 h-6 w-px bg-paper p-0" />
       {project.slots.map((slot) => (
-        <th key={slot.id} className="sticky top-0 z-20 h-6 bg-paper px-1.5 py-0 text-left font-mono font-semibold">
+        <th key={slot.id} className="sticky top-0 z-20 h-6 bg-paper px-1.5 py-0 text-center font-mono font-normal">
           {slotLabel(project, slot.id)}
         </th>
       ))}
@@ -192,13 +191,13 @@ function Grid({
     const partnerById = new Map(partners.map((person) => [person.id, person]))
     const meetingAt = (slot: Id, id: Id) => (rows === 'dm' ? index.byCell.get(`${slot}|${id}`) : index.byTeamSlot.get(`${slot}|${id}`))
     const partnerOf = (meeting: PlacedMeeting) => partnerById.get(rows === 'dm' ? meeting.team : meeting.dm)
-    return people.map((person) => (
-      <tr key={person.id} className="h-6">
+    return people.map((person, rowIndex) => (
+      <tr key={person.id} className={`h-6 ${rowIndex % 2 === 0 ? 'bg-stripe' : ''}`}>
         <th
           scope="row"
-          className="sticky left-0 z-10 h-6 w-px bg-paper px-1.5 py-0 text-left align-middle font-semibold leading-none whitespace-nowrap"
+          className="sticky left-0 z-10 h-6 w-px bg-inherit px-1.5 py-0 text-left align-middle font-semibold leading-none whitespace-nowrap"
         >
-          <Name person={person} display={names.get(person.id)} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
+          <Name person={person} display={names.get(person.id)} side={rows} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
         </th>
         {project.slots.map((slot) => {
           const meeting = meetingAt(slot.id, person.id)
@@ -225,7 +224,7 @@ function Grid({
                 }`}
               >
                 {partner && <RequestMark dm={dmAsked} team={teamAsked} />}
-                {partner && <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" />}
+                {partner && <Name person={partner} display={names.get(partner.id)} side={rows === 'dm' ? 'team' : 'dm'} variant="code" className="flex" />}
                 {(repeat || (off && partner)) && (
                   <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
                     {repeat ? '×2' : '!'}
@@ -301,8 +300,9 @@ function Inspector({
 
   const assign = (partner: Id | null) => onAssign(assignCell(project.meetings, slot, side, anchor, partner, available))
   const cur = current ? asksFor(pairWith(current).team, pairWith(current).dm) : null
+  const currentPerson = current ? candidates.find((person) => person.id === current) : undefined
   const code = (id: Id) => names.get(id)?.code ?? participantName(project, id)
-  const anchorCode = code(anchor)
+  const styledCode = (id: Id, codeSide: Side) => <span className={codeSide === 'team' ? 'italic' : ''}>{code(id)}</span>
 
   /** One line on what picking this candidate does to the rest of the board. */
   const effectLine = (e: AssignEffect): ReactNode => {
@@ -313,13 +313,13 @@ function Inspector({
       case 'move':
         return (
           <>
-            moves from {code(e.displaced)} <span className="text-warn">· leaves {code(e.displaced)} free</span>
+            moves from {styledCode(e.displaced, other)} <span className="text-warn">· leaves {styledCode(e.displaced, other)} free</span>
           </>
         )
       case 'swap':
         return (
           <>
-            swap · {code(e.displaced)} gets {code(e.second[other])} <RequestMark {...asksFor(e.second.team, e.second.dm)} />
+            swap · {styledCode(e.displaced, other)} gets {styledCode(e.second[other], other)} <RequestMark {...asksFor(e.second.team, e.second.dm)} />
           </>
         )
       case 'repeat':
@@ -327,14 +327,14 @@ function Inspector({
         return null
     }
   }
-  const list = (list: CandidateRow[]) => <CandidateList rows={list} board={board} onPick={assign} load={load} effectLine={effectLine} />
+  const list = (list: CandidateRow[]) => <CandidateList rows={list} side={other} board={board} onPick={assign} load={load} effectLine={effectLine} />
 
   return (
     <div className="flex flex-col">
       <div className="flex items-start justify-between gap-2 border-b border-rule px-2 py-1.5">
         <div className="min-w-0">
           <div className="eyebrow">{time}</div>
-          <div className="truncate font-bold" title={anchorPerson.name}>
+          <div className={`truncate font-bold ${side === 'team' ? 'italic' : ''}`} title={anchorPerson.name}>
             {anchorPerson.name}
           </div>
         </div>
@@ -360,7 +360,7 @@ function Inspector({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="eyebrow">Meets</div>
-                  <div className="truncate font-semibold">{participantName(project, current)}</div>
+                  {currentPerson && <Name person={currentPerson} display={names.get(current)} side={other} className="flex font-semibold" />}
                   <div className="flex items-center gap-1.5 text-muted">
                     <RequestMark dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
                   </div>
@@ -386,14 +386,16 @@ function Inspector({
             {(alreadyMet > 0 || away > 0) && (
               <p className="mt-2 text-muted">
                 Not listed:{' '}
-                {[alreadyMet > 0 && `${alreadyMet} already meet ${anchorCode} today`, away > 0 && `${away} not available at ${time}`].filter(Boolean).join(' · ')}
+                {alreadyMet > 0 && <>{alreadyMet} already meet {styledCode(anchor, side)} today</>}
+                {alreadyMet > 0 && away > 0 && ' · '}
+                {away > 0 && `${away} not available at ${time}`}
               </p>
             )}
           </div>
 
           <div className="border-t border-rule px-2 py-1">
             <Button variant="quiet" onClick={() => onAvailability(anchor, slot, false)} title="Blocks this slot; any meeting here is removed">
-              {anchorCode} can't do {time}
+              {styledCode(anchor, side)} can't do {time}
             </Button>
           </div>
         </>
@@ -412,12 +414,14 @@ interface CandidateRow {
 
 function CandidateList({
   rows,
+  side,
   board,
   onPick,
   load,
   effectLine,
 }: {
   rows: CandidateRow[]
+  side: Side
   board: BoardData
   onPick: (id: Id) => void
   load: Map<Id, number>
@@ -435,7 +439,7 @@ function CandidateList({
             className="flex w-full cursor-pointer items-center justify-between gap-2 py-1 text-left hover:bg-canvas"
           >
             <span className="min-w-0">
-              <Name person={r.person} display={names.get(r.person.id)} className="flex font-semibold" />
+              <Name person={r.person} display={names.get(r.person.id)} side={side} className="flex font-semibold" />
               <span className="block text-muted">
                 {effectLine(r.effect)} · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
               </span>

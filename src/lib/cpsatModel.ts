@@ -157,6 +157,7 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
         objectiveValue: Math.round(solution.objectiveValue),
         bestObjectiveBound: Math.round(solution.bestObjectiveBound),
         solverWallTime: solution.wallTime,
+        ...(seconds === undefined ? {} : { timeLimitSeconds: seconds }),
       }),
     })
     const status = solutionStatus(api, result)

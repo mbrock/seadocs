@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { Participant } from '../lib/scheduler'
+import type { Participant, Side } from '../lib/scheduler'
 import type { DisplayName } from '../lib/names'
 import { askedBy } from '../lib/describe'
 
@@ -47,10 +47,10 @@ export function RequestMark({
   const both = dm && team
   return (
     <span
-      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[2px] border text-white ${
+      className={`flex size-4 shrink-0 items-center justify-center text-white ${
         requested
-          ? `border-transparent ${both ? '' : dm ? 'bg-emerald-600' : 'bg-sea-3'}`
-          : showEmpty ? 'border-rule bg-paper' : 'invisible border-transparent'
+          ? both ? '' : dm ? 'bg-emerald-600' : 'bg-sea-3'
+          : showEmpty ? 'bg-rule' : 'invisible'
       } ${className}`}
       style={both ? { background: 'linear-gradient(135deg, var(--color-emerald-600) 0 50%, var(--color-sea-3) 50% 100%)' } : undefined}
       title={askedBy(dm, team)}
@@ -74,17 +74,19 @@ export function RequestMark({
 export function Name({
   person,
   display,
+  side,
   className = '',
   variant = 'short',
 }: {
   person: Participant
   display?: DisplayName
+  side: Side
   className?: string
   variant?: 'short' | 'code'
 }) {
   const text = variant === 'code' ? (display?.code ?? person.name) : (display?.short ?? person.name)
   return (
-    <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
+    <span className={`inline-flex max-w-full min-w-0 items-baseline ${side === 'team' ? 'italic' : ''} ${className}`} title={person.name}>
       {display?.tag && <Tag>{display.tag}</Tag>}
       <span className="truncate">{text}</span>
     </span>

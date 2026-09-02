@@ -119,14 +119,14 @@ function RequestMatrix({
         <table className="mr-16 w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
-              <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
-                {rowSide === 'DM' ? 'Decision maker' : 'Team'}
+              <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom whitespace-nowrap">
+                <Button variant="quiet" onClick={onAdd}>{addLabel}</Button>
               </th>
               {columns.map((person) => (
                 <th key={person.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
                   <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap">
                     <span className="inline-flex translate-y-full pl-2">
-                      <Name person={person} display={names.get(person.id)} variant="code" />
+                      <Name person={person} display={names.get(person.id)} side={kind === 'dm' ? 'team' : 'dm'} variant="code" />
                     </span>
                   </span>
                 </th>
@@ -140,6 +140,7 @@ function RequestMatrix({
                   <EditableParticipant
                     person={person}
                     display={names.get(person.id)}
+                    side={kind === 'team' ? 'team' : 'dm'}
                     variant={kind === 'team' ? 'code' : 'short'}
                     label={`${rowSide} ${rowIndex + 1}`}
                     placeholder={kind === 'dm' ? 'Name | Organisation, Country' : 'Film team'}
@@ -177,12 +178,6 @@ function RequestMatrix({
                 })}
               </tr>
             ))}
-            <tr className="h-6">
-              <td className="sticky left-0 z-10 bg-paper px-2 py-0">
-                <Button variant="quiet" onClick={onAdd}>{addLabel}</Button>
-              </td>
-              <td colSpan={Math.max(1, columns.length)} />
-            </tr>
           </tbody>
         </table>
       </div>
@@ -193,6 +188,7 @@ function RequestMatrix({
 function EditableParticipant({
   person,
   display,
+  side,
   variant,
   label,
   placeholder,
@@ -201,6 +197,7 @@ function EditableParticipant({
 }: {
   person: Participant
   display?: DisplayName
+  side: 'dm' | 'team'
   variant: 'short' | 'code'
   label: string
   placeholder: string
@@ -212,18 +209,18 @@ function EditableParticipant({
     <div className="relative flex h-6 items-center gap-0.5">
       <input
         aria-label={label}
-        className={`peer absolute inset-y-0 left-0 right-3 z-10 min-w-0 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${value ? 'text-transparent' : 'text-muted'}`}
+        className={`peer absolute inset-y-0 left-0 right-3 z-10 min-w-0 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${side === 'team' ? 'italic' : ''} ${value ? 'text-transparent' : 'text-muted'}`}
         placeholder={placeholder}
         title={value}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
       <span aria-hidden="true" className="invisible flex">
-        <Name person={person} display={display} variant={variant} />
+        <Name person={person} display={display} side={side} variant={variant} />
       </span>
       {value && (
         <span className="pointer-events-none absolute inset-y-0 left-0 right-3 flex items-center peer-focus:hidden">
-          <Name person={person} display={display} variant={variant} className="flex" />
+          <Name person={person} display={display} side={side} variant={variant} className="flex" />
         </span>
       )}
       <button

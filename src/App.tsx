@@ -7,10 +7,11 @@ import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
 import { BoardPanel } from './components/BoardPanel'
 import { sampleProject } from './lib/sample'
+import type { SolverStatusInfo } from './lib/advancedSolver'
 
 export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadLocal() ?? sampleProject()))
-  const [generating, setGenerating] = useState(false)
+  const [solverStatus, setSolverStatus] = useState<SolverStatusInfo | null>(null)
   const project = history.present
   const setProject: Dispatch<SetStateAction<Project>> = useCallback(
     (action) => setHistory((h) => commit(h, typeof action === 'function' ? action(h.present) : action)),
@@ -48,7 +49,7 @@ export default function App() {
               canRedo={history.future.length > 0}
               onUndo={() => setHistory(undo)}
               onRedo={() => setHistory(redo)}
-              generating={generating}
+              solverStatus={solverStatus}
             />
           </div>
         </div>
@@ -61,7 +62,7 @@ export default function App() {
             project={project}
             onChange={setProject}
             onGeneratedMeetings={setGeneratedMeetings}
-            onGeneratingChange={setGenerating}
+            onSolverStatusChange={setSolverStatus}
           />
         </div>
       </main>

@@ -9,6 +9,7 @@
   --color-muted: #667078;
   --color-faint: #a8b0b6;
   --color-rule: #ded8ce;
+  --color-stripe: #f8f7f4;
   --color-accent: #9a3248;
   /* Problems only: clashes, repeats, people booked when they cannot come */
   --color-warn: #c0392b;
@@ -47,6 +48,7 @@
     --color-muted: #a9b0b5;
     --color-faint: #737c82;
     --color-rule: #394045;
+    --color-stripe: #191d1f;
     --color-accent: #d0667c;
     --color-warn: #f07167;
     --color-sea-3: #63b9de;
@@ -74,15 +76,15 @@
 
 @keyframes scheduling-progress {
   from {
-    transform: translateX(-100%);
+    width: var(--progress-from);
   }
   to {
-    transform: translateX(300%);
+    width: var(--progress-to);
   }
 }
 
 @utility scheduling-progress {
-  animation: scheduling-progress 0.9s ease-in-out infinite;
+  animation: scheduling-progress var(--progress-duration) linear forwards;
 }
 
 /* A cell the person cannot do: thin diagonal hatching. */
@@ -99,6 +101,7 @@
     --color-muted: #667078;
     --color-faint: #a8b0b6;
     --color-rule: #ded8ce;
+    --color-stripe: #f8f7f4;
     --color-accent: #9a3248;
     --color-warn: #c0392b;
     --color-sea-3: #2d8fbd;
