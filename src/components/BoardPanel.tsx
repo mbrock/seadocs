@@ -20,6 +20,8 @@ import { participantName, slotLabel, withMeetings, type Project } from '../lib/p
 import { boardCsv, download } from '../lib/csv'
 import { generate, isFresh, type Generated } from '../lib/generate'
 import { Frontier } from './Frontier'
+import { useNames } from './useNames'
+import type { DisplayName } from '../lib/names'
 import { Button, Empty, Figure, Name, OnlineMark, Panel, PanelHeader, ScorePair, Segmented, scoreTint } from './ui'
 
 interface Props {
@@ -39,9 +41,10 @@ interface Cell {
 export function BoardPanel({ project, onChange, generated, onGenerated }: Props) {
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const hasBoard = project.meetings.length > 0
-  const [across, setAcross] = useState<Side>('dm')
+  const [rows, setRows] = useState<Side>('dm')
   const [cell, setCell] = useState<Cell | null>(null)
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
+  const names = useNames(project)
   const stats = useMemo(() => computeStats(project, project.meetings), [project])
   const issues = useMemo(() => findIssues(project.meetings), [project.meetings])
   const fresh = isFresh(generated, project)
@@ -68,7 +71,7 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
   const setMeetings = (meetings: PlacedMeeting[]) => onChange((p) => withMeetings(p, meetings))
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,21rem)]">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,21rem)]">
       <div className="flex min-w-0 flex-col gap-4">
         <Panel>
           <PanelHeader title="Boards">
@@ -94,21 +97,21 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
         <Panel>
           <PanelHeader title={`Board · ${project.meetings.length} meetings`}>
             <Segmented
-              label="Columns"
+              label="Rows"
               size="sm"
-              value={across}
+              value={rows}
               onChange={(v) => {
-                setAcross(v)
+                setRows(v)
                 setCell(null)
               }}
               options={[
-                { value: 'dm', label: 'Decision makers across' },
-                { value: 'team', label: 'Teams across' },
+                { value: 'dm', label: 'Decision makers' },
+                { value: 'team', label: 'Teams' },
               ]}
             />
           </PanelHeader>
           {hasBoard ? (
-            <Grid project={project} index={index} across={across} selected={selected} onSelect={setCell} />
+            <Grid project={project} names={names} index={index} rows={rows} selected={selected} onSelect={setCell} />
           ) : (
             <Empty>No board yet.</Empty>
           )}
@@ -118,82 +121,85 @@ export function BoardPanel({ project, onChange, generated, onGenerated }: Props)
       <aside
         className={
           selected
-            ? 'fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-auto rounded-t-[6px] border-t border-rule bg-paper shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:rounded-[4px] lg:border lg:shadow-none'
-            : 'lg:sticky lg:top-4'
+            ? 'fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-auto rounded-t-[6px] border-t border-rule bg-paper shadow-[0_-8px_24px_rgba(0,0,0,0.12)] lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:rounded-[4px] lg:border lg:shadow-none'
+            : 'lg:sticky lg:top-14'
         }
       >
         {selected ? (
-          <Inspector project={project} index={index} cell={selected} onAssign={setMeetings} onClose={() => setCell(null)} />
+          <Inspector project={project} names={names} index={index} cell={selected} onAssign={setMeetings} onClose={() => setCell(null)} />
         ) : (
-          <Summary project={project} stats={stats} issues={issues} hasBoard={hasBoard} />
+          <Summary project={project} names={names} stats={stats} issues={issues} hasBoard={hasBoard} />
         )}
       </aside>
     </div>
   )
 }
 
+/** Rows = one side (decision makers or teams), columns = slots. */
 function Grid({
   project,
+  names,
   index,
-  across,
+  rows,
   selected,
   onSelect,
 }: {
   project: Project
+  names: Map<Id, DisplayName>
   index: MeetingIndex
-  across: Side
+  rows: Side
   selected: Cell | null
   onSelect: (c: Cell) => void
 }) {
-  const columns: Participant[] = across === 'dm' ? project.dms : project.teams
-  const meetingAt = (slot: Id, id: Id) => (across === 'dm' ? index.byCell.get(`${slot}|${id}`) : index.byTeamSlot.get(`${slot}|${id}`))
-  const partnerOf = (m: PlacedMeeting) => (across === 'dm' ? m.team : m.dm)
+  const people: Participant[] = rows === 'dm' ? project.dms : project.teams
+  const partners: Participant[] = rows === 'dm' ? project.teams : project.dms
+  const partnerById = new Map(partners.map((p) => [p.id, p]))
+  const meetingAt = (slot: Id, id: Id) => (rows === 'dm' ? index.byCell.get(`${slot}|${id}`) : index.byTeamSlot.get(`${slot}|${id}`))
+  const partnerOf = (m: PlacedMeeting) => partnerById.get(rows === 'dm' ? m.team : m.dm)
   return (
     <div className="max-h-[75vh] overflow-auto">
-      <table className="border-separate border-spacing-0 text-[0.8rem]">
+      {/* Fixed layout: the name column is 9rem, slots share the rest, and the table can't grow past the panel unless it has to. */}
+      <table className="w-full table-fixed border-separate border-spacing-0 text-[0.8rem]" style={{ minWidth: `${9 + 6 * project.slots.length}rem` }}>
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 border-r border-b border-rule bg-paper" />
-            {columns.map((c) => (
-              <th
-                key={c.id}
-                title={c.name}
-                className="sticky top-0 z-20 max-w-[9rem] min-w-[9rem] border-r border-b border-rule bg-paper px-2 py-1.5 text-left text-[0.75rem] font-semibold"
-              >
-                <Name person={c} short className="flex" />
+            <th className="sticky top-0 left-0 z-30 w-[9rem] border-r border-b border-rule bg-paper" />
+            {project.slots.map((slot) => (
+              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-2 py-1.5 text-left font-mono text-[0.75rem] font-semibold">
+                {slotLabel(project, slot.id)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {project.slots.map((slot) => (
-            <tr key={slot.id}>
+          {people.map((person) => (
+            <tr key={person.id}>
               <th
                 scope="row"
-                className="sticky left-0 z-10 border-r border-b border-rule bg-paper px-2 py-1 text-left font-mono text-[0.75rem] font-semibold whitespace-nowrap"
+                className="sticky left-0 z-10 border-r border-b border-rule bg-paper px-2 py-1 text-left text-[0.78rem] font-semibold whitespace-nowrap"
               >
-                {slotLabel(project, slot.id)}
+                <Name person={person} display={names.get(person.id)} className="flex" />
               </th>
-              {columns.map((c) => {
-                const m = meetingAt(slot.id, c.id)
-                const partner = m ? partnerOf(m) : null
+              {project.slots.map((slot) => {
+                const m = meetingAt(slot.id, person.id)
+                const partner = m ? partnerOf(m) : undefined
                 const dmScore = m ? scoreOf(project.dmScores, m.team, m.dm) : 0
                 const teamScore = m ? scoreOf(project.teamScores, m.team, m.dm) : 0
                 const duplicate = m ? (index.byPair.get(pairKey(m.team, m.dm))?.length ?? 0) > 1 : false
-                const active = selected?.slot === slot.id && selected.anchor === c.id
+                const active = selected?.slot === slot.id && selected.anchor === person.id
                 return (
-                  <td key={c.id} className="border-r border-b border-rule/70 p-0">
+                  <td key={slot.id} className="border-r border-b border-rule/70 p-0">
                     <button
                       type="button"
                       aria-pressed={active}
-                      aria-label={`${slotLabel(project, slot.id)}, ${c.name}: ${partner ? participantName(project, partner) : 'free'}`}
-                      onClick={() => onSelect({ slot: slot.id, side: across, anchor: c.id })}
-                      className={`flex h-9 w-full cursor-pointer items-center justify-between gap-1 px-2 text-left hover:outline hover:outline-ink ${
+                      aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${partner ? partner.name : 'free'}`}
+                      title={partner ? `${partner.name} · decision maker ${dmScore}, team ${teamScore}` : 'free'}
+                      onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
+                      className={`relative flex min-h-10 w-full cursor-pointer items-center px-2 py-1 text-left text-[0.75rem] hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
                       } ${duplicate ? 'bg-warn-soft' : scoreTint.dm[dmScore]} ${partner ? '' : 'text-faint'}`}
                     >
-                      <span className="truncate">{partner ? participantName(project, partner).split('|')[0].trim() : '·'}</span>
-                      {m && <ScorePair dm={dmScore} team={teamScore} />}
+                      {partner ? <Name person={partner} display={names.get(partner.id)} className="flex" lines={2} /> : <span>·</span>}
+                      {teamScore > 0 && <span aria-hidden className="absolute right-1 bottom-1 h-1 w-1 rounded-full bg-sea-3" />}
                     </button>
                   </td>
                 )
@@ -209,12 +215,14 @@ function Grid({
 /** The selected cell: who is there, and everyone who could be, with what it would cost. */
 function Inspector({
   project,
+  names,
   index,
   cell,
   onAssign,
   onClose,
 }: {
   project: Project
+  names: Map<Id, DisplayName>
   index: MeetingIndex
   cell: Cell
   onAssign: (m: PlacedMeeting[]) => void
@@ -290,11 +298,11 @@ function Inspector({
 
       <div className="px-4 py-3">
         <div className="eyebrow mb-1">{current ? 'Replace with' : 'Assign'}</div>
-        <CandidateList rows={requested} project={project} onPick={assign} load={load} />
+        <CandidateList rows={requested} project={project} names={names} onPick={assign} load={load} />
         {unrequested.length > 0 && (
           <details className="mt-2">
             <summary className="cursor-pointer text-[0.8rem] text-muted">{unrequested.length} nobody asked for</summary>
-            <CandidateList rows={unrequested} project={project} onPick={assign} load={load} />
+            <CandidateList rows={unrequested} project={project} names={names} onPick={assign} load={load} />
           </details>
         )}
       </div>
@@ -314,11 +322,13 @@ interface CandidateRow {
 function CandidateList({
   rows,
   project,
+  names,
   onPick,
   load,
 }: {
   rows: CandidateRow[]
   project: Project
+  names: Map<Id, DisplayName>
   onPick: (id: Id) => void
   load: Map<Id, number>
 }) {
@@ -337,12 +347,12 @@ function CandidateList({
               className="flex w-full cursor-pointer items-center justify-between gap-2 py-1.5 text-left hover:bg-canvas disabled:cursor-default disabled:opacity-45"
             >
               <span className="min-w-0">
-                <Name person={r.person} className="flex text-[0.88rem] font-semibold" />
+                <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
                 <span className="block text-[0.75rem] text-muted">
                   {already
                     ? `already meet · ${slotLabel(project, r.alreadyAt!)}`
                     : r.swapWith
-                      ? `swap with ${participantName(project, r.swapWith).split('|')[0].trim()}`
+                      ? `swap with ${names.get(r.swapWith)?.short ?? participantName(project, r.swapWith)}`
                       : 'free'}
                   {!already && r.swapRepeats && <span className="text-warn"> · repeats a meeting</span>}{' '}
                   · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
@@ -358,9 +368,21 @@ function CandidateList({
 }
 
 /** Shown in the side panel when no cell is selected: how good the board is, what is missing. */
-function Summary({ project, stats, issues, hasBoard }: { project: Project; stats: Stats; issues: Issue[]; hasBoard: boolean }) {
+function Summary({
+  project,
+  names,
+  stats,
+  issues,
+  hasBoard,
+}: {
+  project: Project
+  names: Map<Id, DisplayName>
+  stats: Stats
+  issues: Issue[]
+  hasBoard: boolean
+}) {
   if (!hasBoard) return null
-  const name = (id: Id) => participantName(project, id).split('|')[0].trim()
+  const name = (id: Id) => names.get(id)?.short ?? participantName(project, id)
   const label = (slot: Id) => slotLabel(project, slot)
   return (
     <Panel>

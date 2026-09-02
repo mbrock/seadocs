@@ -3,7 +3,7 @@ import { emptyProject, type Project } from './lib/project'
 import { loadLocal, saveLocal } from './lib/persist'
 import { commit, initialHistory, redo, undo } from './lib/history'
 import type { Generated } from './lib/generate'
-import { StatusStrip } from './components/StatusStrip'
+import { Toolbar } from './components/Toolbar'
 import { PeoplePanel } from './components/PeoplePanel'
 import { InterestPanel } from './components/InterestPanel'
 import { BoardPanel } from './components/BoardPanel'
@@ -61,13 +61,10 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col print:block">
-      <header className="border-b border-rule bg-canvas print:hidden">
-        <div className="wrap flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pt-3 pb-0 sm:pb-2">
-          <div className="pb-2 sm:pb-0">
-            <div className="eyebrow">One-to-one scheduler</div>
-            <h1 className="text-[1.35rem] leading-tight font-extrabold tracking-[-0.04em]">Meeting Board</h1>
-          </div>
-          <nav aria-label="Views" className="-mb-px flex gap-5 overflow-x-auto">
+      <header className="sticky top-0 z-40 border-b border-rule bg-canvas print:hidden">
+        <div className="wrap flex flex-wrap items-center gap-x-5 gap-y-1 py-1.5">
+          <span className="text-[0.85rem] font-extrabold tracking-[-0.02em] whitespace-nowrap">Meeting Board</span>
+          <nav aria-label="Views" className="flex gap-1 overflow-x-auto">
             {VIEWS.map(([id, label]) => (
               <a
                 key={id}
@@ -77,27 +74,28 @@ export default function App() {
                   e.preventDefault()
                   setView(id)
                 }}
-                className={`border-b-2 pb-2 text-[0.95rem] font-semibold whitespace-nowrap ${
-                  view === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
+                className={`rounded-[3px] px-2 py-0.5 text-[0.85rem] font-semibold whitespace-nowrap ${
+                  view === id ? 'bg-ink text-paper' : 'text-muted hover:bg-paper hover:text-ink'
                 }`}
               >
                 {label}
               </a>
             ))}
           </nav>
+          <div className="ml-auto">
+            <Toolbar
+              project={project}
+              onChange={setProject}
+              canUndo={history.past.length > 0}
+              canRedo={history.future.length > 0}
+              onUndo={() => setHistory(undo)}
+              onRedo={() => setHistory(redo)}
+            />
+          </div>
         </div>
       </header>
 
-      <StatusStrip
-        project={project}
-        onChange={setProject}
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
-        onUndo={() => setHistory(undo)}
-        onRedo={() => setHistory(redo)}
-      />
-
-      <main className="wrap flex-1 py-5 print:p-0">
+      <main className="wrap flex-1 py-4 print:p-0">
         {view === 'people' && <PeoplePanel project={project} onChange={setProject} />}
         {view === 'interest' && <InterestPanel project={project} onChange={setProject} />}
         {view === 'board' && <BoardPanel project={project} onChange={setProject} generated={generated} onGenerated={setGenerated} />}

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { indexMeetings, type Id, type MeetingIndex, type Participant, type Side } from '../lib/scheduler'
 import { participantName, slotLabel, type Project } from '../lib/project'
 import { download, personalCsv } from '../lib/csv'
-import { Button, Empty, Name, OnlineMark, Panel, PanelHeader } from './ui'
+import { Button, Chooser, Empty, OnlineMark, Panel, PanelHeader } from './ui'
+import { useNames } from './useNames'
 
 interface Props {
   project: Project
@@ -14,6 +15,8 @@ export function SchedulesPanel({ project }: Props) {
   const index = useMemo(() => indexMeetings(project.meetings), [project.meetings])
   const [chosen, setChosen] = useState<Id | null>(null)
   const [printAll, setPrintAll] = useState(false)
+  const names = useNames(project)
+  const countFor = (id: Id) => project.meetings.filter((m) => m.team === id || m.dm === id).length
 
   const people: { person: Participant; side: Side }[] = [
     ...project.teams.map((person) => ({ person, side: 'team' as const })),
@@ -34,39 +37,23 @@ export function SchedulesPanel({ project }: Props) {
 
   return (
     <>
-      <div className={`grid items-start gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] ${printAll ? 'print:hidden' : ''}`}>
-        <Panel className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden">
+      <div className={`grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] ${printAll ? 'print:hidden' : ''}`}>
+        <Panel className="lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:overflow-auto print:hidden">
           <PanelHeader title="Who">
             <Button onClick={printEveryone}>Print all</Button>
             <Button onClick={() => download('running-orders.csv', personalCsv(project), 'text/csv')}>CSV</Button>
           </PanelHeader>
-          <div className="lg:hidden px-4 py-3">
-            <select
-              aria-label="Person"
-              value={current?.person.id ?? ''}
-              onChange={(e) => setChosen(e.target.value)}
-              className="w-full rounded-[3px] border border-rule bg-paper px-2 py-1.5 text-[0.9rem]"
-            >
-              <optgroup label="Teams">
-                {project.teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Decision makers">
-                {project.dms.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-          </div>
-          <div className="hidden lg:block">
-            <PersonList title="Teams" people={project.teams} current={current?.person.id ?? null} onPick={setChosen} index={index} side="team" />
-            <PersonList title="Decision makers" people={project.dms} current={current?.person.id ?? null} onPick={setChosen} index={index} side="dm" />
-          </div>
+          <Chooser
+            label="Person"
+            groups={[
+              { title: 'Teams', people: project.teams },
+              { title: 'Decision makers', people: project.dms },
+            ]}
+            current={current?.person.id ?? null}
+            onPick={setChosen}
+            names={names}
+            meta={(p) => countFor(p.id)}
+          />
         </Panel>
 
         {current && (
@@ -89,50 +76,6 @@ export function SchedulesPanel({ project }: Props) {
         </div>
       )}
     </>
-  )
-}
-
-function PersonList({
-  title,
-  people,
-  current,
-  onPick,
-  index,
-  side,
-}: {
-  title: string
-  people: Participant[]
-  current: Id | null
-  onPick: (id: Id) => void
-  index: MeetingIndex
-  side: Side
-}) {
-  const count = (id: Id) => {
-    let n = 0
-    for (const m of index.byPair.values()) for (const x of m) if (x[side] === id) n++
-    return n
-  }
-  return (
-    <div className="border-b border-rule py-2 last:border-b-0">
-      <div className="eyebrow px-4 py-1">{title}</div>
-      <ul>
-        {people.map((p) => (
-          <li key={p.id}>
-            <button
-              type="button"
-              aria-current={p.id === current ? 'true' : undefined}
-              onClick={() => onPick(p.id)}
-              className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-1 text-left text-[0.88rem] hover:bg-canvas ${
-                p.id === current ? 'bg-accent-soft font-semibold' : ''
-              }`}
-            >
-              <Name person={p} />
-              <span className="font-mono text-[0.75rem] text-muted tabular-nums">{count(p.id)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 

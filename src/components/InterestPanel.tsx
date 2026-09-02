@@ -2,14 +2,16 @@ import { useState, type Dispatch, type SetStateAction } from 'react'
 import { MAX_SCORE, SCORE_LABELS, scoreOf, type Id, type Participant } from '../lib/scheduler'
 import { randomScores } from '../lib/fixtures'
 import { cycleScore, withScore, withScores, type Project, type ScoreKind } from '../lib/project'
-import { Button, Empty, Name, OnlineMark, Panel, PanelHeader, Segmented, scoreTint, inputClass } from './ui'
+import { Button, Chooser, Empty, Name, OnlineMark, Panel, PanelHeader, Segmented, scoreTint } from './ui'
+import { useNames } from './useNames'
+import { parseName, type DisplayName } from '../lib/names'
 
 interface Props {
   project: Project
   onChange: Dispatch<SetStateAction<Project>>
 }
 
-type Layout = 'grid' | 'list'
+type Layout = 'list' | 'grid'
 
 const MODES: { value: ScoreKind; label: string; title: string }[] = [
   { value: 'dm', label: 'Decision makers ask', title: 'How keen each decision maker is to meet each team. Drives the schedule.' },
@@ -17,13 +19,14 @@ const MODES: { value: ScoreKind; label: string; title: string }[] = [
 ]
 
 /**
- * Two grids with the same shape, edited one at a time. The grid layout needs
- * width; the list layout edits one person's row at a time and is what small
- * screens get.
+ * Two score tables with the same shape, edited one side at a time. The default
+ * layout edits one person's asks at a time; the overview grid shows everything
+ * but needs a wide screen.
  */
 export function InterestPanel({ project, onChange }: Props) {
   const [mode, setMode] = useState<ScoreKind>('dm')
-  const [layout, setLayout] = useState<Layout>('grid')
+  const [layout, setLayout] = useState<Layout>('list')
+  const names = useNames(project)
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const asked = Object.keys(mode === 'dm' ? project.dmScores : project.teamScores).length
 
@@ -38,8 +41,8 @@ export function InterestPanel({ project, onChange }: Props) {
             value={layout}
             onChange={setLayout}
             options={[
-              { value: 'grid', label: 'Grid' },
               { value: 'list', label: 'One at a time' },
+              { value: 'grid', label: 'Overview' },
             ]}
           />
         </div>
@@ -65,7 +68,7 @@ export function InterestPanel({ project, onChange }: Props) {
             <Grid project={project} mode={mode} onCycle={(team, dm) => onChange((p) => cycleScore(p, mode, team, dm))} />
           </div>
           <div className={layout === 'grid' ? 'md:hidden' : ''}>
-            <RowEditor project={project} mode={mode} onSet={(team, dm, s) => onChange((p) => withScore(p, mode, team, dm, s))} />
+            <RowEditor project={project} names={names} mode={mode} onSet={(team, dm, s) => onChange((p) => withScore(p, mode, team, dm, s))} />
           </div>
         </>
       )}
@@ -75,7 +78,7 @@ export function InterestPanel({ project, onChange }: Props) {
 
 function ScoreKey({ kind }: { kind: ScoreKind }) {
   return (
-    <div className="flex items-center gap-2 font-mono text-[0.7rem] text-muted">
+    <div className="flex items-center gap-2 text-[0.7rem] text-muted">
       {SCORE_LABELS.map((label, s) => (
         <span key={s} className="inline-flex items-center gap-1" title={label}>
           <span className={`inline-flex h-4 w-4 items-center justify-center rounded-[2px] border border-rule text-[0.65rem] ${scoreTint[kind][s]}`}>
@@ -128,7 +131,7 @@ function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; o
                       type="button"
                       title={`${d.name} × ${t.name}: ${SCORE_LABELS[s]}${other ? ` (other side: ${SCORE_LABELS[other]})` : ''}`}
                       onClick={() => onCycle(t.id, d.id)}
-                      className={`relative block h-7 w-7 cursor-pointer font-mono text-[0.8rem] font-semibold hover:outline hover:outline-ink ${scoreTint[mode][s] || 'text-faint'}`}
+                      className={`relative block h-7 w-7 cursor-pointer text-[0.8rem] font-semibold tabular-nums hover:outline hover:outline-ink ${scoreTint[mode][s] || 'text-faint'}`}
                     >
                       {s || ''}
                       {other > 0 && <span aria-hidden className={`absolute right-0.5 bottom-0.5 h-1 w-1 rounded-full ${otherDot}`} />}
@@ -145,70 +148,99 @@ function Grid({ project, mode, onCycle }: { project: Project; mode: ScoreKind; o
 }
 
 /** Pick one person on the asking side; rate everyone on the other side. */
-function RowEditor({ project, mode, onSet }: { project: Project; mode: ScoreKind; onSet: (team: Id, dm: Id, score: number) => void }) {
+function RowEditor({
+  project,
+  names,
+  mode,
+  onSet,
+}: {
+  project: Project
+  names: Map<Id, DisplayName>
+  mode: ScoreKind
+  onSet: (team: Id, dm: Id, score: number) => void
+}) {
   const askers: Participant[] = mode === 'dm' ? project.dms : project.teams
   const targets: Participant[] = mode === 'dm' ? project.teams : project.dms
   const [pickedId, setPicked] = useState<Id | null>(null)
   const asker = askers.find((a) => a.id === pickedId) ?? askers[0]
   const scores = mode === 'dm' ? project.dmScores : project.teamScores
   const otherScores = mode === 'dm' ? project.teamScores : project.dmScores
-  const pair = (target: Participant): [Id, Id] => (mode === 'dm' ? [target.id, asker.id] : [asker.id, target.id])
+  const pair = (asking: Id, target: Id): [Id, Id] => (mode === 'dm' ? [target, asking] : [asking, target])
+  const asksOf = (a: Participant) => targets.filter((t) => scoreOf(scores, ...pair(a.id, t.id)) > 0).length
   const index = askers.indexOf(asker)
   const step = (delta: number) => setPicked(askers[(index + delta + askers.length) % askers.length].id)
+  const display = names.get(asker.id)
 
   return (
-    <div className="p-4">
-      <div className="flex items-center gap-2">
-        <Button onClick={() => step(-1)} aria-label="Previous" className="px-2">
-          ‹
-        </Button>
-        <select aria-label={mode === 'dm' ? 'Decision maker' : 'Team'} className={`${inputClass} min-w-0 flex-1 font-sans`} value={asker.id} onChange={(e) => setPicked(e.target.value)}>
-          {askers.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-        <Button onClick={() => step(1)} aria-label="Next" className="px-2">
-          ›
-        </Button>
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start lg:grid-cols-[minmax(13rem,17rem)_minmax(0,1fr)]">
+      <div className="border-b border-rule lg:sticky lg:top-14 lg:max-h-[calc(100vh-4.5rem)] lg:overflow-auto lg:border-r lg:border-b-0">
+        <Chooser
+          label={mode === 'dm' ? 'Decision maker' : 'Team'}
+          groups={[{ title: mode === 'dm' ? 'Decision makers' : 'Teams', people: askers }]}
+          current={asker.id}
+          onPick={setPicked}
+          names={names}
+          meta={(a) => `${asksOf(a)}/${targets.length}`}
+        />
       </div>
-      <p className="mt-2 mb-3 text-[0.8rem] text-muted">
-        {index + 1} of {askers.length} · how keen {mode === 'dm' ? 'this decision maker' : 'this team'} is to meet each of these
-      </p>
-      <ul className="divide-y divide-rule border-y border-rule">
-        {targets.map((t) => {
-          const [team, dm] = pair(t)
-          const s = scoreOf(scores, team, dm)
-          const other = scoreOf(otherScores, team, dm)
-          return (
-            <li key={t.id} className="flex items-center justify-between gap-3 py-1.5">
-              <span className="min-w-0 flex-1 truncate text-[0.9rem]" title={t.name}>
-                {t.name}
-                <OnlineMark show={t.online} />
-                {other > 0 && <span className="ml-2 font-mono text-[0.7rem] text-muted">they: {other}</span>}
-              </span>
-              <div role="radiogroup" aria-label={`${asker.name} → ${t.name}`} className="inline-flex shrink-0 rounded-[3px] border border-rule">
-                {Array.from({ length: MAX_SCORE + 1 }, (_, v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    role="radio"
-                    aria-checked={s === v}
-                    title={SCORE_LABELS[v]}
-                    onClick={() => onSet(team, dm, v)}
-                    className={`h-8 w-9 cursor-pointer font-mono text-[0.85rem] font-semibold first:rounded-l-[2px] last:rounded-r-[2px] ${
-                      s === v ? scoreTint[mode][v] || 'bg-ink text-paper' : 'text-faint hover:bg-canvas hover:text-ink'
-                    }`}
-                  >
-                    {v || '–'}
-                  </button>
-                ))}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
+      <div className="px-4 py-3">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="eyebrow">
+              {mode === 'dm' ? 'Decision maker' : 'Team'} · {index + 1} of {askers.length}
+            </div>
+            <div className="text-[1.05rem] leading-tight font-bold">
+              {parseName(asker.name).person}
+              <OnlineMark show={asker.online} />
+            </div>
+            {display?.affiliation && <div className="text-[0.8rem] text-muted">{display.affiliation}</div>}
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button onClick={() => step(-1)} aria-label="Previous" className="px-2">
+              ‹
+            </Button>
+            <Button onClick={() => step(1)} aria-label="Next" className="px-2">
+              ›
+            </Button>
+          </div>
+        </div>
+        <ul className="divide-y divide-rule border-y border-rule">
+          {targets.map((t) => {
+            const [team, dm] = pair(asker.id, t.id)
+            const s = scoreOf(scores, team, dm)
+            const other = scoreOf(otherScores, team, dm)
+            return (
+              <li key={t.id} className="flex items-center justify-between gap-3 py-1.5">
+                <span className="flex min-w-0 flex-1 items-baseline gap-2 text-[0.9rem]">
+                  <Name person={t} display={names.get(t.id)} className="flex" />
+                  {other > 0 && (
+                    <span className={`shrink-0 rounded-[2px] px-1 text-[0.68rem] font-semibold ${scoreTint[mode === 'dm' ? 'team' : 'dm'][other]}`} title={`They asked: ${SCORE_LABELS[other]}`}>
+                      they {other}
+                    </span>
+                  )}
+                </span>
+                <div role="radiogroup" aria-label={`${asker.name} → ${t.name}`} className="inline-flex shrink-0 rounded-[3px] border border-rule">
+                  {Array.from({ length: MAX_SCORE + 1 }, (_, v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={s === v}
+                      title={SCORE_LABELS[v]}
+                      onClick={() => onSet(team, dm, v)}
+                      className={`h-8 w-9 cursor-pointer text-[0.85rem] font-semibold tabular-nums first:rounded-l-[2px] last:rounded-r-[2px] ${
+                        s === v ? scoreTint[mode][v] || 'bg-ink text-paper' : 'text-faint hover:bg-canvas hover:text-ink'
+                      }`}
+                    >
+                      {v || '–'}
+                    </button>
+                  ))}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </div>
   )
 }

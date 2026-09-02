@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/public-sans';
 
 @theme {
   /* Surfaces and text */
@@ -22,7 +23,7 @@
   --color-sea-2: #9fc8e1;
   --color-sea-3: #2d8fbd;
 
-  --font-sans: 'Public Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-sans: 'Public Sans Variable', 'Public Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 

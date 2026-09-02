@@ -72,7 +72,7 @@ export function Frontier({ project, alternatives, onPick }: Props) {
   const columns = OBJECTIVES.filter(({ key }) => alternatives.some((a) => a.objectives[key] > 0) || (current?.[key] ?? 0) > 0)
 
   const th = 'px-2 py-1.5 text-right text-[0.7rem] font-semibold text-muted whitespace-nowrap'
-  const td = 'px-2 py-1.5 text-right font-mono text-[0.8rem] tabular-nums'
+  const td = 'px-2 py-1.5 text-right text-[0.8rem] tabular-nums'
   const row = (active: boolean) => `border-t border-rule ${active ? 'bg-accent-soft' : 'hover:bg-canvas'}`
   return (
     <div className="overflow-auto">
@@ -105,7 +105,7 @@ export function Frontier({ project, alternatives, onPick }: Props) {
             >
               <td className="px-2 py-1.5 text-[0.85rem] font-semibold whitespace-nowrap">
                 {names[i]}
-                {i === selected && <span className="ml-2 font-mono text-[0.7rem] font-normal text-accent">on board</span>}
+                {i === selected && <span className="ml-2 text-[0.7rem] font-semibold text-accent uppercase tracking-[0.06em]">on board</span>}
               </td>
               {columns.map(({ key }) => (
                 <td key={key} className={`${td} ${a.objectives[key] === best[key] ? 'font-bold text-accent' : ''}`}>
@@ -119,7 +119,7 @@ export function Frontier({ project, alternatives, onPick }: Props) {
               <td className="px-2 py-1.5 text-[0.85rem] font-semibold whitespace-nowrap">
                 Edited by hand
                 {alternatives.some((a) => sameObjectives(a.objectives, current)) && (
-                  <span className="ml-2 font-mono text-[0.7rem] font-normal text-muted">same scores as a generated board</span>
+                  <span className="ml-2 text-[0.7rem] font-normal text-muted">same scores as a generated board</span>
                 )}
               </td>
               {columns.map(({ key }) => (

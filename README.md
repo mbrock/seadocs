@@ -12,12 +12,14 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-The app has four views, reached from the header (the view is in the URL hash,
-so links and back/forward work). A status strip under the header always shows
-the size of the day, any clashes, and save / open / new / undo / redo.
+The app has four views, reached from the header bar (the view is in the URL
+hash, so links and back/forward work). The same bar holds undo / redo and
+save / open / new, and shows a clash count when the board has one.
 
 - **People** — paste the list of teams and the list of decision makers (one
-  per line; a trailing `*` marks someone who joins online), set the number of
+  per line as `Name | Organisation, Country`; the country becomes a small tag
+  and names are shortened to "J. Cornejo" in dense tables; a trailing `*`
+  marks someone who joins online), set the number of
   slots and optionally label them with times, and a *minimum meetings per
   team* floor so no team goes home with an empty day when there is room to
   avoid it. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
@@ -25,13 +27,16 @@ the size of the day, any clashes, and save / open / new / undo / redo.
   0–3 (none / interested / priority / must-meet). *Decision makers ask* is the
   primary signal; *Teams ask* is secondary: it breaks ties between meetings a
   decision maker rated equally, and lets a team ask for a meeting the decision
-  maker didn't request (placed last, if there's room). A small dot in a cell
-  means the other side also asked. On narrow screens, or with *One at a time*,
-  the grid becomes one person's row with a 0–3 control per counterpart.
+  maker didn't request (placed last, if there's room). You edit one person's
+  asks at a time — pick them on the left, rate everyone on the right, with the
+  other side's ask shown alongside — or switch to *Overview* for the whole
+  grid on a wide screen.
 - **Board** — *Generate* builds a short table of alternative boards, each
   named by what it trades (“Best for decision makers”, “Fewer DM windows”,
   “More team interest met”…) and scored on the objectives below; the first is
-  loaded onto the board. Columns can be decision makers or teams. Click any
+  loaded onto the board. Rows are decision makers (or teams), columns are
+  slots; a cell's tint is the decision maker's interest, a blue dot means the
+  team asked too. Click any
   cell to open it in the side panel: who is there, and every counterpart that
   could be, strongest request first, marked *free*, *swap with …* (the two
   meetings trade partners) or *already meet*. Duplicates and double bookings
@@ -147,16 +152,17 @@ path, so it works under a project path like `/seadocs/` without configuration.
 ```
 index.html                 Vite entry
 src/main.tsx               mounts <App/>
-src/index.css              Tailwind import and the colour/font theme
+src/index.css              Tailwind + Public Sans import and the colour/font theme
 src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, ScorePair, score tints
-src/components/StatusStrip.tsx   summary, clashes, save / open / new / undo / redo
+src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the header)
 src/components/PeoplePanel.tsx   rosters, slots, team floor, example loaders
 src/components/InterestPanel.tsx dense grid and one-person-at-a-time editor
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
 src/components/Frontier.tsx      the alternatives table, named by trade-off
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
 src/lib/history.ts         undo/redo stack over immutable project values
+src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
 src/lib/scheduler.ts       greedy selection, slot assignment (edge colouring), stats, issues
 src/lib/flow.ts            exact max-weight selection via min-cost flow
 src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's days

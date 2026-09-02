@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import type { Participant } from '../lib/scheduler'
+import type { Id, Participant } from '../lib/scheduler'
+import type { DisplayName } from '../lib/names'
 
 type Variant = 'primary' | 'default' | 'quiet' | 'danger'
 
@@ -83,7 +84,7 @@ export function Figure({ value, label, tone = 'ink' }: { value: ReactNode; label
   const colour = tone === 'warn' ? 'text-warn' : tone === 'muted' ? 'text-muted' : 'text-ink'
   return (
     <div className="min-w-[5rem]">
-      <div className={`font-mono text-[1.25rem] leading-tight font-semibold tabular-nums ${colour}`}>{value}</div>
+      <div className={`text-[1.25rem] leading-tight font-semibold tabular-nums ${colour}`}>{value}</div>
       <div className="eyebrow font-semibold normal-case tracking-normal">{label}</div>
     </div>
   )
@@ -93,7 +94,7 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="px-4 py-8 text-center text-[0.9rem] text-muted">{children}</p>
 }
 
-export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 font-mono text-[0.85rem] focus:border-ink focus:outline-none'
+export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 text-[0.85rem] focus:border-ink focus:outline-none'
 export const textareaClass = `${inputClass} w-full resize-y leading-[1.5]`
 
 /** Interest score 0..3 as background + text classes; rose for decision makers, sea for teams. */
@@ -105,7 +106,7 @@ export const scoreTint = {
 /** Small mono marker "3·2": decision-maker score, then team score. Zeros are dimmed. */
 export function ScorePair({ dm, team }: { dm: number; team: number }) {
   return (
-    <span className="font-mono text-[0.7rem] tabular-nums" title={`decision maker ${dm}, team ${team}`}>
+    <span className="text-[0.7rem] font-semibold tabular-nums" title={`decision maker ${dm}, team ${team}`}>
       <span className={dm ? '' : 'opacity-40'}>{dm}</span>
       <span className="opacity-40">·</span>
       <span className={team ? '' : 'opacity-40'}>{team}</span>
@@ -114,25 +115,110 @@ export function ScorePair({ dm, team }: { dm: number; team: number }) {
 }
 
 /**
- * A participant's name that truncates without losing the online mark.
- * `short` keeps only the part before the first "|" (name without affiliation).
+ * A participant's name that truncates without losing its marks. With `display`
+ * (from `displayNames`) it renders the short form plus the country tag:
+ * "J. Cornejo ES".
  */
-export function Name({ person, short = false, className = '' }: { person: Participant; short?: boolean; className?: string }) {
-  const text = short ? person.name.split('|')[0].trim() : person.name
+export function Name({
+  person,
+  display,
+  className = '',
+  lines = 1,
+}: {
+  person: Participant
+  display?: DisplayName
+  className?: string
+  /** Allow wrapping to this many lines before clipping (default: single line, ellipsis). */
+  lines?: 1 | 2
+}) {
   return (
     <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
-      <span className="truncate">{text}</span>
+      <span className={lines === 2 ? 'line-clamp-2 leading-[1.2] [overflow-wrap:anywhere]' : 'truncate'}>{display?.short ?? person.name}</span>
+      {display?.tag && <Tag>{display.tag}</Tag>}
       <OnlineMark show={person.online} />
     </span>
   )
+}
+
+/** Small-caps style label, e.g. a country code after a name. */
+export function Tag({ children }: { children: ReactNode }) {
+  return <span className="ml-1 shrink-0 self-center rounded-[2px] border border-rule px-[3px] text-[0.58rem] leading-[1.4] font-bold tracking-[0.08em] text-muted">{children}</span>
 }
 
 /** Marks a participant who joins by video. */
 export function OnlineMark({ show }: { show?: boolean }) {
   if (!show) return null
   return (
-    <span title="joins online" aria-label="online" className="ml-1 inline-block align-middle font-mono text-[0.7rem] font-bold text-sea-3">
+    <span title="joins online" aria-label="online" className="ml-1 inline-block align-middle text-[0.7rem] font-bold text-sea-3">
       ◌
     </span>
+  )
+}
+
+export interface ChooserGroup {
+  title: string
+  people: Participant[]
+}
+
+/**
+ * Pick one person from grouped lists. A vertical list from `lg` up (meant for
+ * a sticky side column); a single <select> below that.
+ */
+export function Chooser({
+  groups,
+  current,
+  onPick,
+  names,
+  meta,
+  label,
+}: {
+  groups: ChooserGroup[]
+  current: Id | null
+  onPick: (id: Id) => void
+  names?: Map<Id, DisplayName>
+  /** Small right-aligned annotation per row, e.g. a count. */
+  meta?: (p: Participant) => ReactNode
+  label: string
+}) {
+  return (
+    <>
+      <div className="px-4 py-3 lg:hidden">
+        <select aria-label={label} value={current ?? ''} onChange={(e) => onPick(e.target.value)} className={`${inputClass} w-full`}>
+          {groups.map((g) => (
+            <optgroup key={g.title} label={g.title}>
+              {g.people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+      <div className="hidden lg:block">
+        {groups.map((g) => (
+          <div key={g.title} className="border-b border-rule py-2 last:border-b-0">
+            <div className="eyebrow px-4 py-1">{g.title}</div>
+            <ul>
+              {g.people.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    aria-current={p.id === current ? 'true' : undefined}
+                    onClick={() => onPick(p.id)}
+                    className={`flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-1 text-left text-[0.88rem] hover:bg-canvas ${
+                      p.id === current ? 'bg-accent-soft font-semibold' : ''
+                    }`}
+                  >
+                    <Name person={p} display={names?.get(p.id)} />
+                    {meta && <span className="shrink-0 text-[0.75rem] text-muted tabular-nums">{meta(p)}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }

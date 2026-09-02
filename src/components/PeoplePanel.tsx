@@ -58,7 +58,7 @@ export function PeoplePanel({ project, onChange }: Props) {
           <textarea
             id="teamsInput"
             aria-label="Teams, one per line"
-            className={`${textareaClass} min-h-[18rem]`}
+            className={`${textareaClass} min-h-[24rem]`}
             placeholder={'One project per line'}
             value={drafts.teamsText}
             onChange={(e) => edit({ teamsText: e.target.value })}
@@ -72,13 +72,13 @@ export function PeoplePanel({ project, onChange }: Props) {
           <textarea
             id="dmsInput"
             aria-label="Decision makers, one per line"
-            className={`${textareaClass} min-h-[18rem]`}
+            className={`${textareaClass} min-h-[24rem]`}
             placeholder={'One person per line\nName | Organisation, Country\nEnd a line with * for someone joining online'}
             value={drafts.dmsText}
             onChange={(e) => edit({ dmsText: e.target.value })}
           />
           <p className="mt-2 text-[0.8rem] text-muted">
-            One per line. A trailing <span className="font-mono">*</span> marks someone joining online.
+            One per line as <b>Name | Organisation, Country</b> — the country becomes a tag and long names are shortened on the board. A trailing <b>*</b> marks someone joining online.
           </p>
         </div>
       </Panel>
