@@ -52,6 +52,17 @@ describe('integrated CP-SAT model', () => {
     expect(result.kind === 'optimal').toBe(result.phases.every((p) => p.status === 'optimal'))
   })
 
+  test('prove-optimal mode runs every stage without a cutoff', async () => {
+    const input = {
+      teams: [participant('t1'), participant('t2')], dms: [participant('d1')], slots: numberedSlots(1),
+      dmAsks: { 't1|d1': true, 't2|d1': true } as const, teamAsks: { 't1|d1': true } as const,
+    }
+    const result = await solveWithCpSat(api, { ...input, currentBoard: [], fallbackHint: [], proveOptimal: true })
+    expect(result.kind).toBe('optimal')
+    expect(result.phases.every((phase) => phase.status === 'optimal')).toBe(true)
+    expect(result.meetings).toEqual([{ team: 't1', dm: 'd1', slot: 's1' }])
+  })
+
   test('solves the deterministic 13×17 sample at normal event scale', async () => {
     const project = sampleProject()
     const fallbackHint = optimize(project)[0].meetings

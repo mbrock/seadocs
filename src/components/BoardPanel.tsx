@@ -23,8 +23,7 @@ import {
 import { measure, requestedCounts, type Objectives, type ObjectiveKey } from '../lib/objectives'
 import { availabilityOfProject, participantName, slotLabel, withAvailability, withMeetings, type Project } from '../lib/project'
 import { boardCsv, download } from '../lib/csv'
-import { optimize, type Alternative } from '../lib/optimize'
-import { Frontier } from './Frontier'
+import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
 import { Button, Empty, Figure, KeyItem, Name, OnlineMark, Panel, PanelHeader, AskPair, askTint, Segmented, Swatch } from './ui'
@@ -49,6 +48,7 @@ export function BoardPanel({ project, onChange }: Props) {
   const hasBoard = project.meetings.length > 0
   const [rows, setRows] = useState<Side>('dm')
   const [cell, setCell] = useState<Cell | null>(null)
+  const [solveMode, setSolveMode] = useState<'quick' | 'optimal'>('quick')
   const [advancedStatus, setAdvancedStatus] = useState<string | null>(null)
   const [advancedRunning, setAdvancedRunning] = useState(false)
   const cancelAdvanced = useRef<(() => void) | null>(null)
@@ -59,11 +59,13 @@ export function BoardPanel({ project, onChange }: Props) {
   const available = useMemo(() => availabilityOfProject({ teams, dms }), [teams, dms])
   const stats = useMemo(() => computeStats(project, project.meetings), [project])
   const issues = useMemo(() => findIssues(project.meetings, available), [project.meetings, available])
-  // The boards the solver would build from the current input, recomputed only when the input (not the board) changes.
-  const alternatives: Alternative[] = useMemo(
-    () => (hasPeople ? optimize({ teams, dms, dmAsks, teamAsks, slots }) : []),
+  // The old scheduler is deliberately invisible: only an incumbent hint and
+  // emergency fallback if local WASM cannot return a valid solution.
+  const fallbackHint = useMemo(
+    () => (hasPeople ? (optimize({ teams, dms, dmAsks, teamAsks, slots })[0]?.meetings ?? []) : []),
     [hasPeople, teams, dms, dmAsks, teamAsks, slots],
   )
+  const hasRequests = Object.keys(dmAsks).length + Object.keys(teamAsks).length > 0
 
   // Forget the selection when its slot or participant disappears.
   const cellValid =
@@ -79,7 +81,6 @@ export function BoardPanel({ project, onChange }: Props) {
   }, [])
 
   const setMeetings = (meetings: PlacedMeeting[]) => onChange((p) => withMeetings(p, meetings))
-  const recommended = alternatives[0]?.meetings ?? []
   const inputKey = JSON.stringify([teams, dms, dmAsks, teamAsks, slots, project.meetings])
 
   useEffect(() => {
@@ -87,15 +88,15 @@ export function BoardPanel({ project, onChange }: Props) {
       cancelAdvanced.current?.()
       cancelAdvanced.current = null
       setAdvancedRunning(false)
-      setAdvancedStatus('Advanced solve cancelled because the scheduling input changed · board unchanged')
+      setAdvancedStatus('Solve cancelled because the scheduling input changed · board unchanged')
     }
   }, [inputKey])
 
   useEffect(() => () => cancelAdvanced.current?.(), [])
 
   const applyFallback = (reason: string) => {
-    if (recommended.length) setMeetings(recommended)
-    setAdvancedStatus(`Fast scheduler fallback — ${reason}`)
+    if (fallbackHint.length) setMeetings(fallbackHint)
+    setAdvancedStatus(`Fallback schedule used — ${reason}`)
     setAdvancedRunning(false)
   }
   const advancedResult = (result: AdvancedSolverResult) => {
@@ -117,10 +118,10 @@ export function BoardPanel({ project, onChange }: Props) {
   const runAdvanced = () => {
     cancelAdvanced.current?.()
     setAdvancedRunning(true)
-    setAdvancedStatus('Advanced local solver running… the current board will stay until a valid result is ready.')
+    setAdvancedStatus(solveMode === 'optimal' ? 'Proving every objective stage optimal… no time limit; the current board stays until proof completes.' : 'Solving locally… the current board stays until a valid result is ready.')
     advancedInputKey.current = inputKey
     cancelAdvanced.current = startAdvancedSolve(
-      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint: recommended, maxTimeMs: 3000 },
+      { teams, dms, dmAsks, teamAsks, slots, currentBoard: project.meetings, fallbackHint, proveOptimal: solveMode === 'optimal', maxTimeMs: 3000 },
       advancedResult,
       (message) => {
         cancelAdvanced.current = null
@@ -132,7 +133,7 @@ export function BoardPanel({ project, onChange }: Props) {
     cancelAdvanced.current?.()
     cancelAdvanced.current = null
     setAdvancedRunning(false)
-    setAdvancedStatus('Advanced solve cancelled · board unchanged')
+    setAdvancedStatus('Solve cancelled · board unchanged')
   }
 
   return (
@@ -155,21 +156,26 @@ export function BoardPanel({ project, onChange }: Props) {
               ]}
             />
           )}
-          {!hasBoard && (
-            <Button variant="primary" disabled={!hasPeople || recommended.length === 0} onClick={() => setMeetings(recommended)}>
-              Generate fast
-            </Button>
-          )}
+          <Segmented
+            label="Solve mode"
+            size="sm"
+            value={solveMode}
+            onChange={setSolveMode}
+            options={[
+              { value: 'quick', label: 'Quick', title: 'Return the best valid schedule found in about three seconds' },
+              { value: 'optimal', label: 'Prove optimal', title: 'Run without a time limit until every objective stage is proven optimal' },
+            ]}
+          />
           {advancedRunning ? (
-            <Button onClick={stopAdvanced}>Cancel advanced</Button>
+            <Button onClick={stopAdvanced}>Cancel</Button>
           ) : (
             <Button
-              variant={hasBoard ? 'default' : 'primary'}
-              disabled={!hasPeople || recommended.length === 0}
-              title="Experimental: optimize locally in a Web Worker with CP-SAT; no data is uploaded"
+              variant="primary"
+              disabled={!hasPeople || !hasRequests}
+              title="Generate locally with CP-SAT; no data is uploaded"
               onClick={runAdvanced}
             >
-              Advanced · experimental
+              Generate
             </Button>
           )}
           <Button
@@ -185,14 +191,13 @@ export function BoardPanel({ project, onChange }: Props) {
             {advancedStatus} · runs only in this browser; no data is uploaded
           </div>
         )}
-        {hasBoard && <Frontier project={project} alternatives={alternatives} onPick={setMeetings} />}
         {hasBoard ? (
           <Grid project={project} names={names} index={index} available={available} rows={rows} selected={selected} onSelect={setCell} />
         ) : (
           <Empty>
             {!hasPeople
               ? 'Add people and interest first.'
-              : recommended.length === 0
+              : !hasRequests
                 ? 'Nobody has asked for a meeting yet — fill in the interest grid.'
                 : 'Generate builds the board from the interest grids.'}
           </Empty>

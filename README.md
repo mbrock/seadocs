@@ -37,16 +37,11 @@ save / open / new, and shows a problem count when the board has one.
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
   (placed if there's room).
-- **Board** — the fast solver runs on the current input as you work; *Generate fast*
-  puts its **recommended** board on screen: the one that misses the fewest
-  decision-maker asks, then leaves the fewest decision makers with under half
-  of what they asked for, then leaves the fewest teams out. The strip under the
-  header names the board on screen and says how good it is in plain words
-  ("102 of 116 DM asks, 95 of 114 team asks · 3 DM windows"); once you edit it
-  becomes *Your board*, with *Use recommended* to go back. *Compare* unfolds
-  the other boards, each named by what it gains and what it costs ("More team
-  asks met · 1 more team ask met · costs 6 DM asks, 2 DM windows"), and one
-  click puts any of them on screen. Rows are decision makers (or teams),
+- **Board** — *Generate* runs the local CP-SAT solver and puts its board on
+  screen. **Quick** returns a validated incumbent in about three seconds;
+  **Prove optimal** runs without a time limit until every objective stage is
+  proven, and can be cancelled at any time. The current board stays visible
+  while either mode runs. Rows are decision makers (or teams),
   columns are slots; the key in the panel header explains the cells: gold
   means the decision maker asked for this meeting, the blue bar at a cell's
   right edge means the team asked, a white cell with a name is a meeting
@@ -61,19 +56,16 @@ save / open / new, and shows a problem count when the board has one.
   counterparts that would break either rule are not listed, only counted
   ("Not listed: 4 already meet Kawakami today"). The same panel is where you
   record that someone **can't do a slot** — "Kawakami can't do 15:20" blocks
-  the cell (and removes any meeting there); the solver's recommendation
-  updates around it. When no cell is selected the side panel shows the board's
+  the cell (and removes any meeting there). When no cell is selected the side
+  panel shows the board's
   figures (DM and team asks met / asked, windows, DMs under half, teams left out), any
   *problems* (a repeat, a double booking or a meeting at a blocked time, which
   only a hand-written file can contain — the editor cannot create one), how
   many meetings each decision maker got of those they asked for (worst first),
   and the requested meetings that did not fit, each with why (both full, DM
   full, team full, or the slot where both are still free). Export is disabled
-  while problems remain. *Advanced · experimental* instead runs an integrated
-  pair-and-slot CP-SAT model locally in a Web Worker. It downloads the solver
-  only when clicked, keeps the current board visible while working, can be
-  cancelled, and never uploads roster or interest data. Its status distinguishes
-  a fully proven `OPTIMAL` result from a valid time-limited `FEASIBLE` incumbent.
+  while problems remain. The solver runs entirely in a Web Worker in this
+  browser and never uploads roster or interest data.
 - **Schedules** — one running order per team or decision maker, headed with
   the event name and stamped with the print time, to print one at a time or
   all at once (one page each), or export everyone's as CSV. Decision makers
@@ -101,93 +93,12 @@ or so decision-maker asks cannot be met whatever the board. *Random 26 × 26* is
 
 ## How the schedule is built
 
-There is no single "best" board: a board that honours more decision-maker
-requests usually honours fewer team requests, and packing one person's day
-tightly can spread out someone else's. So *Generate* does not return one
-answer. It builds a handful of good boards, measures each against the
-objectives below, discards every board that is beaten on all counts by another
-(the survivors are the **Pareto frontier**), and recommends the first in
-priority order — the others are a click away under *Compare*.
-
-### Objectives
-
-All are counts to be made as small as possible, listed in the order used to
-rank the table (see [`src/lib/objectives.ts`](src/lib/objectives.ts)):
-
-| Objective | Meaning |
-| --- | --- |
-| DM asks | decision-maker asks that got no meeting |
-| DMs under half | decision makers who got fewer than half of the meetings they asked for |
-| teams left out | teams with no meeting at all |
-| DM windows | empty slots between a decision maker's first and last meeting, summed over all decision makers |
-| team asks | team asks that got no meeting |
-| fillers | meetings nobody asked for |
-| team windows | as DM windows, for teams |
-
-Asks are either/or — there are no grades of interest — because that is how
-the people ticking the boxes think of them, and it keeps every count above
-something you can check by hand. The app shows missed counts as *met / asked*.
-
-"DMs under half" is the fairness objective: with more asks than seats the
-decision makers who asked for the most would otherwise soak up the room while
-someone who ticked six boxes gets one meeting. It ranks below DM asks (it never
-costs one) and above team asks.
-
-"Windows" capture the request that a decision maker's day should not be one
-meeting at 9, one at 13 and one at 18: idle slots before the first or after the
-last meeting are fine, idle slots in the middle are not.
-
-### Pipeline
-
-Generation is three pure steps.
-
-**1. Candidate selections** ([`src/lib/optimize.ts`](src/lib/optimize.ts)).
-Which meetings happen is decided several ways: the original greedy ranking
-(asked by the decision maker, then by the team, then whoever has fewest
-meetings), with and without filling leftover capacity, and an **exact**
-maximum-weight selector ([`src/lib/flow.ts`](src/lib/flow.ts), min-cost flow)
-run under several weightings of decision-maker vs team asks, with and without
-a one-meeting-per-team floor. The "dm-first" and "fair" weightings are
-strictly lexicographic (one decision-maker ask outweighs every team ask put
-together), so their boards meet the most DM asks possible. Among boards
-equally good for the decision makers as a group, "fair" breaks ties by **fair
-share** — it prefers giving a meeting to the decision maker who has so far
-received the smallest fraction of what they asked for — and only then by team
-asks; that weighting usually produces the recommended board. Each selection respects one-meeting-per-slot
-capacity on both sides, counting only the slots each person can do.
-
-**2. Slot assignment** ([`src/lib/scheduler.ts`](src/lib/scheduler.ts)).
-Because the teams/decision-makers graph is bipartite, König's edge-colouring
-theorem guarantees any selection from step 1 fits into the slots with nobody
-double-booked. The implementation is alternating-path recolouring, so with
-everyone available all day no chosen meeting is stranded. (The original
-prototype put each meeting in the earliest slot free for both sides, which
-can.) Blocked slots break the guarantee; the rare meeting that then cannot be
-placed is dropped and shows up under *Not scheduled*.
-
-**3. Compaction** ([`src/lib/compact.ts`](src/lib/compact.ts)). Slot
-assignment says nothing about *which* slots, so a further pass swaps pairs of
-slots along alternating chains (Kempe chains; always valid in a bipartite graph)
-whenever that reduces windows, decision makers first, then teams. Which
-meetings happen never changes here, only when.
-
-Every board is then measured, dominated ones are dropped, and the frontier is
-sorted by the objective order above. The comparison also shows a *Your board*
-row whenever the board differs from every generated one, so you can see what
-the edit cost or gained. Generation is deterministic: the same input gives the
-same boards, which is why there is no "generate again" — the frontier is
-recomputed whenever people, interest, slots or availability change. A
-26 × 26 × 12 day takes about a third of a second.
-
-### Experimental local CP-SAT solver
-
-The advanced button lazily loads the portable WebAssembly build of
+Generate lazily loads the portable WebAssembly build of
 `cpsat-js@1.3.0` in an app-owned module Worker. The model decides whether each
 team × decision-maker pair meets **and** its slot together, so availability,
 one meeting per person per slot, and pair uniqueness are hard constraints
-rather than assumptions made before placement. The current fast recommendation
-is only a starting hint and fallback. Every returned board is checked again by
-ordinary TypeScript before it can replace the board on screen.
+rather than assumptions made before placement. Every returned board is checked
+again by ordinary TypeScript before it can replace the board on screen.
 
 Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at
@@ -196,8 +107,8 @@ incumbent value becomes the next stage's constraint. Phase B rebuilds the full
 selectable pair × slot model with DM internal-gap variables, then minimizes DM
 gaps, retains useful extra meetings, and finally favors unchanged current-board
 cells. It does not freeze Phase A pair choices. Because the present project
-format has binary asks but no explicit filler consent or per-DM cap, advanced
-generation allows at most one meeting per DM that the DM did not request; this
+format has binary asks but no explicit filler consent or per-DM cap, generation
+allows at most one meeting per DM that the DM did not request; this
 is the deliberately conservative burden guardrail for team-only and filler
 meetings.
 
@@ -205,9 +116,10 @@ Current project files do not distinguish locks/pins from editable board cells,
 so manual cells are stability preferences, not hidden hard locks. If lock/pin
 fields are added later they must become explicit hard constraints and validator
 checks. The current fairness compromise is similarly intentional: v1 maximizes
-the number of teams served, but does not reproduce the fast scheduler's “DMs
-under half” threshold. The fast scheduler is a robust fallback, not a
-correctness oracle for the integrated model.
+the number of teams served rather than using the old “DMs under half” threshold.
+The previous JavaScript scheduler remains only as a starting hint and emergency
+fallback if WebAssembly fails; it is not a visible alternative or a correctness
+oracle for the integrated model.
 
 ## Running it
 
@@ -240,7 +152,6 @@ src/components/Toolbar.tsx       clashes, undo / redo, save / open / new (in the
 src/components/SetupPanel.tsx    unified people/day and requests workflow, previews, example loaders
 src/components/InterestPanel.tsx compact two-sided request grid used by Setup
 src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
-src/components/Frontier.tsx      which board is on screen, and the folded-away comparison of alternatives
 src/components/SchedulesPanel.tsx per-person running orders, print, CSV
 src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/names.ts           short display names ("J. Cornejo" + country tag) from "Name | Org, Country"
@@ -248,8 +159,11 @@ src/lib/scheduler.ts       participants and availability, greedy selection, slot
 src/lib/flow.ts            exact max-weight selection via min-cost flow
 src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's days
 src/lib/objectives.ts      the objective vector, dominance, frontier merge
-src/lib/describe.ts        boards in words: names by trade-off, one-line quality
-src/lib/optimize.ts        runs the candidates through the pipeline, returns the frontier
+src/lib/describe.ts        shared request descriptions
+src/lib/advancedSolver.ts  Worker protocol, independent validation and audit metrics
+src/lib/cpsatModel.ts      integrated pair × slot CP-SAT model and staged objectives
+src/lib/optimize.ts        legacy JavaScript incumbent hint and emergency fallback
+src/workers/cpsat.worker.ts lazy local WebAssembly solver worker
 src/lib/project.ts         project model: participants, slots, asks, meetings, with* update functions
 src/lib/persist.ts         project file format (v5) with v1–v4 migration, localStorage
 src/lib/sample.ts          the BSD 2026 sample day (real names, invented interest)

@@ -7,6 +7,8 @@ export interface AdvancedSolverInput extends ScheduleInput {
   currentBoard: PlacedMeeting[]
   /** A valid board from the fast JavaScript scheduler, used only as a search hint. */
   fallbackHint: PlacedMeeting[]
+  /** Omit all wall-clock limits and solve every objective stage to proof. */
+  proveOptimal?: boolean
   maxTimeMs?: number
 }
 

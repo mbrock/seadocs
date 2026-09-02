@@ -142,10 +142,10 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput): Prom
   let hasSolverIncumbent = false
   let allOptimal = true
 
-  const run = (state: ModelState, name: SolverPhase['name'], metric: keyof ModelState['metrics'], direction: Direction, seconds: number) => {
+  const run = (state: ModelState, name: SolverPhase['name'], metric: keyof ModelState['metrics'], direction: Direction, seconds?: number) => {
     if (direction === 'max') state.model.maximize(state.metrics[metric])
     else state.model.minimize(state.metrics[metric])
-    const result = solver.solve(state.model, { maxTimeInSeconds: seconds, numWorkers: 1 })
+    const result = solver.solve(state.model, { ...(seconds === undefined ? {} : { maxTimeInSeconds: seconds }), numWorkers: 1 })
     const status = solutionStatus(api, result)
     const phase: SolverPhase = { name, status }
     if (status !== 'no incumbent') {
@@ -168,19 +168,20 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput): Prom
   // Portable CP-SAT needs enough time to get through first-solve startup even
   // on tiny fixtures; later stages usually prove before their limit.
   const short = Math.max(0.15, budget / 1000 / 9)
-  run(a, 'mutual requests', 'mutual', 'max', short)
-  run(a, 'DM requests', 'dmRequested', 'max', short)
-  run(a, 'teams served', 'teamsServed', 'max', short)
-  run(a, 'team requests', 'teamRequested', 'max', short)
+  const limit = (multiple = 1) => input.proveOptimal ? undefined : short * multiple
+  run(a, 'mutual requests', 'mutual', 'max', limit())
+  run(a, 'DM requests', 'dmRequested', 'max', limit())
+  run(a, 'teams served', 'teamsServed', 'max', limit())
+  run(a, 'team requests', 'teamRequested', 'max', limit())
 
   const b = buildModel(api, input, true, floors, incumbent)
-  run(b, 'DM gaps', 'dmGaps', 'min', short * 2)
-  run(b, 'total meetings', 'total', 'max', short)
-  run(b, 'stability', 'stable', 'max', short)
+  run(b, 'DM gaps', 'dmGaps', 'min', limit(2))
+  run(b, 'total meetings', 'total', 'max', limit())
+  run(b, 'stability', 'stable', 'max', limit())
 
   const runtimeMs = performance.now() - started
   if (!hasSolverIncumbent && !incumbent.length && input.teams.length && input.dms.length && Object.keys(input.dmAsks).length + Object.keys(input.teamAsks).length > 0) {
-    return { kind: 'failed', phases, runtimeMs, message: 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
+    return { kind: 'failed', phases, runtimeMs, message: input.proveOptimal ? 'No valid CP-SAT solution was found.' : 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
   }
   // Recompute metrics independently as a final read of the board; this also
   // makes accidental protocol/model drift visible in tests and diagnostics.
