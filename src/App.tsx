@@ -4,6 +4,7 @@ import { SaveBar } from './components/SaveBar'
 import { SetupPanel } from './components/SetupPanel'
 import { InterestPanel } from './components/InterestPanel'
 import { SchedulePanel } from './components/SchedulePanel'
+import type { Generated } from './lib/generate'
 import { PersonPanel } from './components/PersonPanel'
 import { TabButton } from './components/ui'
 
@@ -25,6 +26,8 @@ function headerStamp(project: Project): string {
 export default function App() {
   const [project, setProject] = useState<Project>(() => loadLocal() ?? emptyProject())
   const [tab, setTab] = useState<Tab>('setup')
+  // The last generated frontier. Not persisted: generating is deterministic and quick.
+  const [generated, setGenerated] = useState<Generated | null>(null)
 
   useEffect(() => saveLocal(project), [project])
 
@@ -50,7 +53,7 @@ export default function App() {
 
       {tab === 'setup' && <SetupPanel project={project} onChange={setProject} />}
       {tab === 'prefs' && <InterestPanel project={project} onChange={setProject} />}
-      {tab === 'schedule' && <SchedulePanel project={project} onChange={setProject} />}
+      {tab === 'schedule' && <SchedulePanel project={project} onChange={setProject} generated={generated} onGenerated={setGenerated} />}
       {tab === 'person' && <PersonPanel project={project} />}
 
       <p className="mt-6 text-[12px] italic text-[#8a8471] print:hidden">

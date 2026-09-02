@@ -22,7 +22,8 @@ export interface Project {
   dmScores: Scores
   teamScores: Scores
   meetings: PlacedMeeting[]
-  fillGaps: boolean
+  /** Every team should get at least this many meetings (an objective, not a hard rule). */
+  teamFloor: number
   nextId: number
 }
 
@@ -36,7 +37,7 @@ export function emptyProject(): Project {
     dmScores: {},
     teamScores: {},
     meetings: [],
-    fillGaps: false,
+    teamFloor: 1,
     nextId: 1,
   }
 }
@@ -87,6 +88,10 @@ function reconcile(existing: Participant[], names: string[], prefix: string, cou
 export function withSlots(project: Project, slotCount: number | string, slotLabels: string[]): Project {
   const n = Math.min(MAX_SLOTS, Math.max(1, Math.floor(Number(slotCount)) || 1))
   return prune({ ...project, slotCount: n, slotLabels: [...slotLabels] })
+}
+
+export function withTeamFloor(project: Project, teamFloor: number | string): Project {
+  return { ...project, teamFloor: cleanFloor(teamFloor) }
 }
 
 /** Drop scores and meetings that refer to participants or slots that no longer exist. */
@@ -154,7 +159,7 @@ export function deserialize(text: string): Project {
     dmScores: cleanScores(d.dmScores),
     teamScores: cleanScores(d.teamScores),
     meetings: Array.isArray(d.meetings) ? d.meetings.filter(isMeeting) : [],
-    fillGaps: Boolean(d.fillGaps),
+    teamFloor: cleanFloor(d.teamFloor),
     nextId: Number(d.nextId) || 1,
   })
 }
@@ -169,6 +174,11 @@ function isParticipant(p: unknown): p is Participant {
 
 function isMeeting(m: unknown): m is PlacedMeeting {
   return isRecord(m) && typeof m.team === 'string' && typeof m.dm === 'string' && Number.isInteger(m.slot) && (m.slot as number) >= 0
+}
+
+function cleanFloor(x: unknown): number {
+  const n = Math.floor(Number(x))
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, MAX_SLOTS) : emptyProject().teamFloor
 }
 
 function cleanScores(scores: unknown): Scores {

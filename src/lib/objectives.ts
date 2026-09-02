@@ -1,0 +1,117 @@
+// What makes one schedule better than another, as a vector of counts.
+//
+// Every dimension is an integer to minimise with a one-line meaning, so the
+// user can read a row of numbers and understand exactly what is being traded.
+// A schedule DOMINATES another when it is no worse on every dimension and
+// strictly better on at least one; the FRONTIER is the set of schedules that
+// nobody dominates. Different frontier points are genuinely different choices
+// (e.g. "one more decision-maker wish granted" vs "two fewer idle windows"),
+// which is why we show them all rather than picking by a hidden formula.
+
+import { allPairs, MAX_SCORE, pairKey, type Id, type PlacedMeeting, type ScheduleInput } from './scheduler'
+
+export interface Objectives {
+  /** Decision-maker must-meets (score 3) that did not get a meeting. */
+  missedMust: number
+  /** Sum of decision-maker scores over requested pairs that did not meet. */
+  dmLoss: number
+  /** Teams with fewer than `teamFloor` meetings. */
+  teamsShort: number
+  /** Idle slots inside a decision maker's day (between their first and last meeting), summed. */
+  dmGaps: number
+  /** Sum of team scores over requested pairs that did not meet. */
+  teamLoss: number
+  /** Meetings that neither side asked for. */
+  fillers: number
+  /** Idle slots inside a team's day, summed. */
+  teamGaps: number
+}
+
+export type ObjectiveKey = keyof Objectives
+
+/** In priority order: this is also the tie-break order used to pick a default. */
+export const OBJECTIVES: { key: ObjectiveKey; label: string; hint: string }[] = [
+  { key: 'missedMust', label: 'must-meets missed', hint: 'Decision-maker must-meets that got no meeting' },
+  { key: 'dmLoss', label: 'DM interest lost', hint: 'Decision-maker scores (1–3) of requested meetings that did not happen, added up' },
+  { key: 'teamsShort', label: 'teams short', hint: 'Teams with fewer meetings than the minimum you set' },
+  { key: 'dmGaps', label: 'DM windows', hint: 'Empty slots between a decision maker’s first and last meeting, added up over all decision makers' },
+  { key: 'teamLoss', label: 'team interest lost', hint: 'Team scores of requested meetings that did not happen, added up' },
+  { key: 'fillers', label: 'fillers', hint: 'Meetings nobody asked for' },
+  { key: 'teamGaps', label: 'team windows', hint: 'Empty slots between a team’s first and last meeting, added up over all teams' },
+]
+
+export interface ObjectiveInput extends ScheduleInput {
+  /** Every team should get at least this many meetings. */
+  teamFloor: number
+}
+
+/** Idle slots strictly inside each participant's day, summed. */
+export function gapsOf(meetings: PlacedMeeting[], side: 'team' | 'dm'): number {
+  const slots = new Map<Id, number[]>()
+  for (const m of meetings) {
+    const id = m[side]
+    if (!slots.has(id)) slots.set(id, [])
+    slots.get(id)!.push(m.slot)
+  }
+  let gaps = 0
+  for (const s of slots.values()) {
+    const distinct = new Set(s)
+    gaps += Math.max(...s) - Math.min(...s) + 1 - distinct.size
+  }
+  return gaps
+}
+
+export function measure(input: ObjectiveInput, meetings: PlacedMeeting[]): Objectives {
+  const met = new Set(meetings.map((m) => pairKey(m.team, m.dm)))
+  const perTeam = new Map<Id, number>()
+  for (const m of meetings) perTeam.set(m.team, (perTeam.get(m.team) ?? 0) + 1)
+
+  const o: Objectives = { missedMust: 0, dmLoss: 0, teamsShort: 0, dmGaps: 0, teamLoss: 0, fillers: 0, teamGaps: 0 }
+  for (const p of allPairs(input)) {
+    if (met.has(pairKey(p.team, p.dm))) {
+      if (p.dmScore === 0 && p.teamScore === 0) o.fillers++
+    } else {
+      if (p.dmScore === MAX_SCORE) o.missedMust++
+      o.dmLoss += p.dmScore
+      o.teamLoss += p.teamScore
+    }
+  }
+  o.teamsShort = input.teams.filter((t) => (perTeam.get(t.id) ?? 0) < input.teamFloor).length
+  o.dmGaps = gapsOf(meetings, 'dm')
+  o.teamGaps = gapsOf(meetings, 'team')
+  return o
+}
+
+/** True when `a` is at least as good everywhere and strictly better somewhere. */
+export function dominates(a: Objectives, b: Objectives): boolean {
+  let strict = false
+  for (const { key } of OBJECTIVES) {
+    if (a[key] > b[key]) return false
+    if (a[key] < b[key]) strict = true
+  }
+  return strict
+}
+
+export function sameObjectives(a: Objectives, b: Objectives): boolean {
+  return OBJECTIVES.every(({ key }) => a[key] === b[key])
+}
+
+/** Priority order: first dimension that differs decides. */
+export function compareLex(a: Objectives, b: Objectives): number {
+  for (const { key } of OBJECTIVES) if (a[key] !== b[key]) return a[key] - b[key]
+  return 0
+}
+
+/**
+ * Insert into a frontier: dropped if something already there dominates or
+ * equals it; otherwise added, evicting whatever it dominates. Frontiers here
+ * are small (a handful to a few dozen points), so the quadratic merge is fine.
+ */
+export function addToFrontier<T>(frontier: T[], item: T, objectives: (t: T) => Objectives): T[] {
+  const o = objectives(item)
+  for (const f of frontier) {
+    const fo = objectives(f)
+    if (dominates(fo, o) || sameObjectives(fo, o)) return frontier
+  }
+  return [...frontier.filter((f) => !dominates(o, objectives(f))), item]
+}

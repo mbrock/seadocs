@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
-import { demoProject, parseLines, parseNames, withParticipants, withSlots, type Project } from '../lib/state'
+import { demoProject, parseLines, parseNames, withParticipants, withSlots, withTeamFloor, type Project } from '../lib/state'
 import { Button, Card, CardTitle, FieldLabel, Hint, Stamp } from './ui'
 import { inputClass, textareaClass } from './styles'
 
@@ -13,6 +13,7 @@ interface Drafts {
   dmsText: string
   slotCount: string
   labelsText: string
+  teamFloor: string
 }
 
 function draftsFrom(project: Project): Drafts {
@@ -21,6 +22,7 @@ function draftsFrom(project: Project): Drafts {
     dmsText: project.dms.map((d) => d.name).join('\n'),
     slotCount: String(project.slotCount),
     labelsText: project.slotLabels.join('\n'),
+    teamFloor: String(project.teamFloor),
   }
 }
 
@@ -34,12 +36,13 @@ export function SetupPanel({ project, onChange }: Props) {
     setDrafts(draftsFrom(project))
   }
   const [stamp, setStamp] = useState('')
-  const { teamsText, dmsText, slotCount, labelsText } = drafts
+  const { teamsText, dmsText, slotCount, labelsText, teamFloor } = drafts
   const edit = (patch: Partial<Drafts>) => setDrafts((d) => ({ ...d, ...patch }))
 
   function apply() {
     let next = withParticipants(project, parseNames(teamsText), parseNames(dmsText))
     next = withSlots(next, slotCount, parseLines(labelsText))
+    next = withTeamFloor(next, teamFloor)
     onChange(next)
     setStamp(`Saved: ${next.teams.length} teams, ${next.dms.length} decision makers, ${next.slotCount} slots.`)
   }
@@ -111,6 +114,24 @@ export function SetupPanel({ project, onChange }: Props) {
             />
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Fairness</CardTitle>
+        <Hint>
+          How many meetings should every team get at least? The scheduler treats this as a goal, not a rule: boards that leave a
+          team short are shown with that count so you can weigh it against everything else. 0 turns it off.
+        </Hint>
+        <FieldLabel htmlFor="teamFloor">Minimum meetings per team</FieldLabel>
+        <input
+          id="teamFloor"
+          type="number"
+          min={0}
+          max={60}
+          className={inputClass}
+          value={teamFloor}
+          onChange={(e) => edit({ teamFloor: e.target.value })}
+        />
       </Card>
 
       <Card>

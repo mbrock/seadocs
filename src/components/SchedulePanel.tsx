@@ -1,6 +1,5 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import {
-  buildSchedule,
   computeStats,
   findIssues,
   indexMeetings,
@@ -15,43 +14,42 @@ import {
 } from '../lib/scheduler'
 import { participantName, slotLabel, withMeetings, type Project } from '../lib/state'
 import { boardCsv, download, personalCsv } from '../lib/csv'
+import { generate, isFresh, type Generated } from '../lib/generate'
+import { Alternatives } from './Alternatives'
 import { Button, Card, CardTitle, Hint } from './ui'
 
 interface Props {
   project: Project
   onChange: Dispatch<SetStateAction<Project>>
+  generated: Generated | null
+  onGenerated: (g: Generated) => void
 }
 
-export function SchedulePanel({ project, onChange }: Props) {
+export function SchedulePanel({ project, onChange, generated, onGenerated }: Props) {
   const hasPeople = project.teams.length > 0 && project.dms.length > 0
   const hasBoard = project.meetings.length > 0
   const stats = useMemo(() => computeStats(project, project.meetings), [project])
   const issues = useMemo(() => findIssues(project.meetings), [project.meetings])
+  const fresh = isFresh(generated, project)
+
+  function run() {
+    const g = generate(project)
+    onGenerated(g)
+    onChange(withMeetings(project, g.alternatives[0].meetings))
+  }
 
   return (
     <>
       <Card>
         <CardTitle>Generate</CardTitle>
         <Hint>
-          Chooses which meetings happen (highest decision-maker interest first, then team interest, spreading equal interest evenly
-          across teams), then fits every chosen meeting into the slots. Generating again replaces any manual changes.
+          Works out several boards, each the best possible for a different balance of the goals below, squeezes idle windows out of
+          everyone's day, and keeps only the boards that no other board beats on every count. The first is loaded; the others are
+          one click away. Generating again replaces any manual changes.
         </Hint>
-        <label className="mb-1 block text-[13px] italic text-muted">
-          <input
-            type="checkbox"
-            className="mr-1.5 accent-teal"
-            checked={project.fillGaps}
-            onChange={(e) => onChange((p) => ({ ...p, fillGaps: e.target.checked }))}
-          />
-          Fill leftover gaps with pairings nobody asked for (off = leave those slots free)
-        </label>
         <div>
-          <Button
-            variant="action"
-            disabled={!hasPeople}
-            onClick={() => onChange(withMeetings(project, buildSchedule(project, { fillGaps: project.fillGaps })))}
-          >
-            Generate schedule
+          <Button variant="action" disabled={!hasPeople} onClick={run}>
+            {hasBoard ? 'Generate again' : 'Generate schedule'}
           </Button>
           <Button disabled={!hasBoard} onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}>
             Export board CSV
@@ -60,6 +58,18 @@ export function SchedulePanel({ project, onChange }: Props) {
             Export personal schedules CSV
           </Button>
         </div>
+        {generated && !fresh && hasBoard && (
+          <Hint className="mt-3 mb-0 text-brick">
+            Participants, interest, slots or the team minimum changed since these boards were generated — generate again.
+          </Hint>
+        )}
+        {fresh && (
+          <Alternatives
+            project={project}
+            alternatives={generated.alternatives}
+            onPick={(meetings) => onChange((p) => withMeetings(p, meetings))}
+          />
+        )}
         {hasBoard && (
           <>
             <StatsRow stats={stats} />
