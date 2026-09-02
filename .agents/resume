@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs every time an orb wakes, with a 10-second budget: only quick checks.
+# There is nothing to authenticate or reconnect here; the dev server is a
+# supervised orb service (.amp/services.yaml) and restarts on its own.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -d node_modules ]; then
+  echo "node_modules is missing; run .agents/setup" >&2
+  exit 1
+fi
+echo "ready · node $(node -v)"

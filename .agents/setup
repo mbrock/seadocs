@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Orb setup: everything a fresh sandbox needs to build, test and serve this repo.
+# Runs once per fresh orb (and again on a stale snapshot), so it must be
+# idempotent and fast on a warm filesystem. See https://ampcode.com/docs/orbs
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { printf '\n== %s (%s)\n' "$1" "$(date +%T)"; }
+
+step "toolchain"
+# Node and npm come with the orb base image; CI (.github/workflows/deploy.yml)
+# uses Node 22, and anything newer works. Fail loudly if the image ever lacks them.
+command -v node >/dev/null || { echo "node is missing from the base image" >&2; exit 1; }
+echo "node $(node -v) · npm $(npm -v)"
+
+step "dependencies"
+# `npm install` against the committed lockfile is a no-op (~0.4s) when
+# node_modules already matches, so a stale snapshot does no work here.
+# On a cold orb it is a full install from package-lock.json.
+time npm install --no-audit --no-fund
+
+step "typecheck"
+# Warms the TypeScript build-info caches (tsconfig.*.tsbuildinfo) so the
+# first `npm run build` / `npx tsc -b` in the orb is incremental.
+time npx tsc -b
+
+step "done"
