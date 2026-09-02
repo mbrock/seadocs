@@ -111,10 +111,10 @@ function RequestMatrix({
   return (
     <section className="w-fit max-w-full min-w-0">
       <div className="overflow-auto pb-1">
-        <table className="mr-16 w-max border-separate border-spacing-0 text-[0.8rem]">
+        <table className="mr-16 w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
-              <th className="sticky left-0 z-30 h-20 w-52 max-w-52 border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold">
+              <th className="sticky left-0 z-30 h-20 w-px border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
                 {rowSide === 'DM' ? 'Decision maker' : 'Team'}
               </th>
               {columns.map((person) => (
@@ -129,7 +129,7 @@ function RequestMatrix({
           <tbody className="outline outline-1 outline-rule">
             {rows.map((person, rowIndex) => (
               <tr key={person.id} className="group">
-                <th className="sticky left-0 z-10 w-52 max-w-52 border-l border-b border-rule bg-paper px-2 py-1 text-left font-normal group-hover:bg-canvas">
+                <th className="sticky left-0 z-10 w-px border-l border-b border-rule bg-paper px-2 py-1 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
                   <EditableParticipant
                     person={person}
                     display={names.get(person.id)}
@@ -207,12 +207,15 @@ function EditableParticipant({
     <div className="relative flex items-center gap-0.5">
       <input
         aria-label={label}
-        className={`peer z-10 w-0 min-w-0 flex-1 bg-transparent p-0 text-[0.8rem] focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${value ? 'text-transparent' : 'text-muted'}`}
+        className={`peer absolute inset-y-0 left-0 right-3 z-10 min-w-0 bg-transparent p-0 focus:bg-paper focus:text-ink focus:outline-1 focus:outline-ink ${value ? 'text-transparent' : 'text-muted'}`}
         placeholder={placeholder}
         title={value}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+      <span aria-hidden="true" className="invisible flex">
+        <Name person={person} display={display} variant={variant} />
+      </span>
       {value && (
         <span className="pointer-events-none absolute inset-y-0 left-0 right-3 flex items-center peer-focus:hidden">
           <Name person={person} display={display} variant={variant} className="flex" />

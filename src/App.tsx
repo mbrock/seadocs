@@ -39,7 +39,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-paper text-ink print:block">
       <header className="sticky top-0 z-40 border-b border-rule bg-canvas print:hidden">
         <div className="wrap flex flex-wrap items-center gap-x-5 gap-y-1 py-1.5">
-          <span className="text-[0.85rem] font-extrabold tracking-[-0.02em] whitespace-nowrap">Meeting Board</span>
+          <span className="font-extrabold tracking-[-0.02em] whitespace-nowrap">Meeting Board</span>
           <div className="ml-auto">
             <Toolbar
               project={project}

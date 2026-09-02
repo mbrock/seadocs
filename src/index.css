@@ -23,7 +23,7 @@
 @layer base {
   html {
     color-scheme: light;
-    font-size: 15px;
+    font-size: 13px;
   }
   body {
     @apply font-sans antialiased;
@@ -60,7 +60,6 @@
 }
 
 @utility eyebrow {
-  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -84,9 +83,6 @@
     --color-accent: #9a3248;
     --color-warn: #c0392b;
     --color-sea-3: #2d8fbd;
-  }
-  html {
-    font-size: 11pt;
   }
   body {
     background: white;

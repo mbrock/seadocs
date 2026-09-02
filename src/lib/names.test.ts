@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countryCode, displayNames, initialSurname, parseName, titleWord, titleWords } from './names'
+import { countryCode, displayNames, parseName, titleWord, titleWords } from './names'
 
 describe('parseName', () => {
   it('splits person, organisation and country', () => {
@@ -15,19 +15,6 @@ describe('parseName', () => {
   it('handles names without affiliation or country', () => {
     expect(parseName('Concrete Grassland')).toEqual({ person: 'Concrete Grassland', org: '', country: '' })
     expect(parseName('A B | Org')).toEqual({ person: 'A B', org: 'Org', country: '' })
-  })
-})
-
-describe('initialSurname', () => {
-  it('takes the first initial and the last word', () => {
-    expect(initialSurname('José Lorenzo Benitez Cornejo')).toBe('J. Cornejo')
-    expect(initialSurname('Astrid Bjerregaard Nielsen')).toBe('A. Nielsen')
-  })
-  it('ignores bracketed nicknames', () => {
-    expect(initialSurname('Gunny (Gune) Hyoung')).toBe('G. Hyoung')
-  })
-  it('leaves single words alone', () => {
-    expect(initialSurname('Madonna')).toBe('Madonna')
   })
 })
 
@@ -49,18 +36,18 @@ describe('displayNames', () => {
       { id: 'd1', name: 'Rebecca Heiler | goEast, Germany' },
       { id: 't1', name: '14,5 km Away From Our Dreams' },
     ])
-    expect(names.get('d1')).toEqual({ short: 'R. Heiler', code: 'Heiler', tag: 'DE', affiliation: 'goEast, Germany' })
+    expect(names.get('d1')).toEqual({ short: 'Heiler', code: 'Heiler', tag: 'DE', affiliation: 'goEast, Germany' })
     expect(names.get('t1')).toEqual({ short: '14,5 km Away From Our Dreams', code: 'Dreams', tag: '', affiliation: '' })
   })
-  it('falls back to full names when abbreviations collide', () => {
+  it('uses surnames consistently even when they collide', () => {
     const names = displayNames([
       { id: 'a', name: 'Anna Nielsen | DR, Denmark' },
       { id: 'b', name: 'Astrid Nielsen | SVT, Sweden' },
       { id: 'c', name: 'Bo Berg | NRK, Norway' },
     ])
-    expect(names.get('a')?.short).toBe('Anna Nielsen')
-    expect(names.get('b')?.short).toBe('Astrid Nielsen')
-    expect(names.get('c')?.short).toBe('B. Berg')
+    expect(names.get('a')?.short).toBe('Nielsen')
+    expect(names.get('b')?.short).toBe('Nielsen')
+    expect(names.get('c')?.short).toBe('Berg')
   })
 })
 

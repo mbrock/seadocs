@@ -18,7 +18,7 @@ import { availabilityOfProject, participantName, slotLabel, withAvailability, wi
 import { optimize } from '../lib/optimize'
 import { useNames } from './useNames'
 import type { DisplayName } from '../lib/names'
-import { Button, Empty, Name, OnlineMark, Panel, AskPair } from './ui'
+import { AskMark, Button, Empty, Name, Panel } from './ui'
 import { askedBy } from '../lib/describe'
 import { startAdvancedSolve } from '../lib/advancedSolverClient'
 import { validateAdvancedBoard } from '../lib/advancedSolver'
@@ -188,15 +188,14 @@ function Grid({
   const partnerOf = (m: PlacedMeeting) => partnerById.get(rows === 'dm' ? m.team : m.dm)
   return (
     <div className="max-h-[75vh] overflow-auto">
-      {/* Fixed layout: the name column is 8.5rem, slots share the rest, and the table can't grow past the panel unless it has to. */}
-      <table className="w-full table-fixed border-separate border-spacing-0 text-[0.8rem]" style={{ minWidth: `${8.5 + 5.5 * project.slots.length}rem` }}>
+      <table className="w-full border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 w-[8.5rem] border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left text-[0.72rem] font-semibold">
+            <th className="sticky top-0 left-0 z-30 w-px border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-semibold whitespace-nowrap">
               {rows === 'dm' ? 'Decision makers' : 'Teams'}
             </th>
             {project.slots.map((slot) => (
-              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-mono text-[0.75rem] font-semibold">
+              <th key={slot.id} className="sticky top-0 z-20 border-r border-b border-rule bg-paper px-1.5 py-0.5 text-left font-mono font-semibold">
                 {slotLabel(project, slot.id)}
               </th>
             ))}
@@ -207,9 +206,9 @@ function Grid({
             <tr key={person.id}>
               <th
                 scope="row"
-                className="sticky left-0 z-10 border-r border-b border-rule bg-paper px-1.5 py-0 text-left text-[0.78rem] font-semibold whitespace-nowrap"
+                className="sticky left-0 z-10 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap"
               >
-                <Name person={person} display={names.get(person.id)} className="flex" />
+                <Name person={person} display={names.get(person.id)} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
               </th>
               {project.slots.map((slot) => {
                 const m = meetingAt(slot.id, person.id)
@@ -229,16 +228,16 @@ function Grid({
                       aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
                       title={partner ? `${partner.name} · ${askedBy(dmAsked, teamAsked)}` : state}
                       onClick={() => onSelect({ slot: slot.id, side: rows, anchor: person.id })}
-                      className={`relative flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left text-[0.75rem] hover:outline hover:outline-ink ${
+                      className={`relative flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left hover:outline hover:outline-ink ${
                         active ? 'outline-2 outline-accent' : ''
                       } ${off && !partner ? 'hatched' : ''} ${partner ? '' : 'text-faint'} ${
                         partner && !dmAsked && !teamAsked ? 'text-muted' : ''
                       }`}
                     >
-                      {partner && <AskPair dm={dmAsked} team={teamAsked} />}
+                      {partner && <AskMark dm={dmAsked} team={teamAsked} />}
                       {partner ? <Name person={partner} display={names.get(partner.id)} variant="code" className="flex" /> : off ? null : <span>·</span>}
                       {(repeat || (off && partner)) && (
-                        <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 text-[0.65rem] font-bold text-warn">
+                        <span aria-label={repeat ? 'meets twice' : 'not available'} className="ml-auto pl-1 font-bold text-warn">
                           {repeat ? '×2' : '!'}
                         </span>
                       )}
@@ -318,7 +317,7 @@ function Inspector({
       case 'swap':
         return (
           <>
-            swap · {code(e.displaced)} gets {code(e.second[other])} <AskPair {...asksFor(e.second.team, e.second.dm)} />
+            swap · {code(e.displaced)} gets {code(e.second[other])} <AskMark {...asksFor(e.second.team, e.second.dm)} />
           </>
         )
       case 'repeat':
@@ -333,9 +332,8 @@ function Inspector({
       <div className="flex items-start justify-between gap-2 border-b border-rule px-2 py-1.5">
         <div className="min-w-0">
           <div className="eyebrow">{time}</div>
-          <div className="truncate text-[1rem] font-bold" title={anchorPerson.name}>
+          <div className="truncate font-bold" title={anchorPerson.name}>
             {anchorPerson.name}
-            <OnlineMark show={anchorPerson.online} />
           </div>
         </div>
         <Button variant="quiet" onClick={onClose} aria-label="Close">
@@ -348,7 +346,7 @@ function Inspector({
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-semibold">Not available at {time}</div>
-              <div className="text-[0.8rem] text-muted">No meeting is booked here.</div>
+              <div className="text-muted">No meeting is booked here.</div>
             </div>
             <Button onClick={() => onAvailability(anchor, slot, true)}>Available again</Button>
           </div>
@@ -361,8 +359,8 @@ function Inspector({
                 <div className="min-w-0">
                   <div className="eyebrow">Meets</div>
                   <div className="truncate font-semibold">{participantName(project, current)}</div>
-                  <div className="flex items-center gap-1.5 text-[0.8rem] text-muted">
-                    <AskPair dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
+                  <div className="flex items-center gap-1.5 text-muted">
+                    <AskMark dm={cur.dm} team={cur.team} /> {askedBy(cur.dm, cur.team)}
                   </div>
                 </div>
                 <Button onClick={() => assign(null)} title="Take this meeting off the board">
@@ -379,12 +377,12 @@ function Inspector({
             {list(requested)}
             {unrequested.length > 0 && (
               <details className="mt-2">
-                <summary className="cursor-pointer text-[0.8rem] text-muted">{unrequested.length} nobody asked for</summary>
+                <summary className="cursor-pointer text-muted">{unrequested.length} nobody asked for</summary>
                 {list(unrequested)}
               </details>
             )}
             {(alreadyMet > 0 || away > 0) && (
-              <p className="mt-2 text-[0.75rem] text-muted">
+              <p className="mt-2 text-muted">
                 Not listed:{' '}
                 {[alreadyMet > 0 && `${alreadyMet} already meet ${anchorCode} today`, away > 0 && `${away} not available at ${time}`].filter(Boolean).join(' · ')}
               </p>
@@ -424,7 +422,7 @@ function CandidateList({
   effectLine: (e: AssignEffect) => ReactNode
 }) {
   const { project, names } = board
-  if (!rows.length) return <p className="py-1 text-[0.8rem] text-muted">Nobody.</p>
+  if (!rows.length) return <p className="py-1 text-muted">Nobody.</p>
   return (
     <ul className="divide-y divide-rule">
       {rows.map((r) => (
@@ -435,12 +433,12 @@ function CandidateList({
             className="flex w-full cursor-pointer items-center justify-between gap-2 py-1 text-left hover:bg-canvas"
           >
             <span className="min-w-0">
-              <Name person={r.person} display={names.get(r.person.id)} className="flex text-[0.88rem] font-semibold" />
-              <span className="block text-[0.75rem] text-muted">
+              <Name person={r.person} display={names.get(r.person.id)} className="flex font-semibold" />
+              <span className="block text-muted">
                 {effectLine(r.effect)} · {load.get(r.person.id) ?? 0}/{project.slots.length} booked
               </span>
             </span>
-            <AskPair dm={r.dmAsked} team={r.teamAsked} />
+            <AskMark dm={r.dmAsked} team={r.teamAsked} />
           </button>
         </li>
       ))}

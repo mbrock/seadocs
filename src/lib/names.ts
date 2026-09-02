@@ -1,8 +1,8 @@
 // Short forms of participant names for dense tables.
 //
 // Decision makers are entered as "First Last | Organisation, Country". In a
-// board cell that becomes "J. Cornejo" with a small "ES" tag: initial, surname,
-// country. Teams are project titles; for them we pick one salient word and set
+// board cell that becomes "Cornejo" with a small "ES" tag: surname and country.
+// Teams are project titles; for them we pick one salient word and set
 // it in capitals — "The Crust of Europe" → EUROPE — the way a crew talks about
 // the films it knows by heart.
 
@@ -25,13 +25,6 @@ export function parseName(name: string): ParsedName {
   const comma = affiliation.lastIndexOf(',')
   if (comma < 0) return { person, org: affiliation, country: '' }
   return { person, org: affiliation.slice(0, comma).trim(), country: affiliation.slice(comma + 1).trim() }
-}
-
-/** "José Lorenzo Benitez Cornejo" → "J. Cornejo"; single words stay as they are. */
-export function initialSurname(person: string): string {
-  const words = nameWords(person)
-  if (words.length < 2) return person
-  return `${words[0][0]}. ${words[words.length - 1]}`
 }
 
 /** The last word of a name: "Cornejo". */
@@ -179,9 +172,9 @@ export function titleWords(titles: string[]): string[] {
 }
 
 export interface DisplayName {
-  /** Initial + surname for people with an affiliation; the full name otherwise. */
+  /** Surname for people with an affiliation; the full title otherwise. */
   short: string
-  /** The densest form: a title word for teams ("Europe"), the bare surname for people ("Cornejo") when it is unique. */
+  /** The densest form: a title word for teams ("Europe"), the bare surname for people ("Cornejo"). */
   code: string
   /** Country code, or '' when the name carries no country. */
   tag: string
@@ -190,25 +183,20 @@ export interface DisplayName {
 }
 
 /**
- * Short forms for a whole roster at once so that collisions can be resolved:
- * two "A. Nielsen"s fall back to their full names.
+ * Short forms for a whole roster: surnames for people with affiliations and
+ * concise, unique title words for teams.
  */
 export function displayNames(people: Participant[]): Map<Id, DisplayName> {
   const parsed = people.map((p) => ({ p, ...parseName(p.name) }))
-  const shorts = parsed.map(({ org, country, person }) => (org || country ? initialSurname(person) : person))
-  const seen = new Map<string, number>()
-  for (const s of shorts) seen.set(s, (seen.get(s) ?? 0) + 1)
   // Titles (names without affiliation) get title words, made unique among themselves.
   const titled = parsed.filter(({ org, country }) => !org && !country)
   const codes = new Map(titled.map(({ p }, i) => [p.id, titleWords(titled.map((t) => t.person))[i]]))
   const surnames = parsed.map(({ person }) => surname(person))
-  const surnameSeen = new Map<string, number>()
-  for (const s of surnames) surnameSeen.set(s, (surnameSeen.get(s) ?? 0) + 1)
   const out = new Map<Id, DisplayName>()
   parsed.forEach(({ p, person, org, country }, i) => {
-    const short = (seen.get(shorts[i]) ?? 0) > 1 ? person : shorts[i]
+    const short = org || country ? surnames[i] : person
     const affiliation = [org, country].filter(Boolean).join(', ')
-    const personCode = (surnameSeen.get(surnames[i]) ?? 0) > 1 ? short : surnames[i]
+    const personCode = surnames[i]
     out.set(p.id, { short, code: p.code ?? codes.get(p.id) ?? personCode, tag: countryCode(country), affiliation })
   })
   return out

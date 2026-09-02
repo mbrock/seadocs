@@ -57,7 +57,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-1 text-[0.8rem]">
+    <div className="flex flex-wrap items-center justify-end gap-1">
       {issues > 0 && (
         <a href="#board" className="mr-2 rounded-[2px] bg-warn px-1.5 font-semibold text-paper">
           {issues} problem{issues === 1 ? '' : 's'}
