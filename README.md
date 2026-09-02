@@ -12,29 +12,39 @@ to localStorage); projects are saved as JSON files you can email to a colleague.
 
 ## What it does
 
-1. **Setup** — paste the list of teams and the list of decision makers (one per
-   line), say how many slots the day has, and optionally label them with times.
-2. **Interest** — two grids, rows = decision makers, columns = teams. Click a
-   cell to cycle 0 → 1 → 2 → 3 (none / interested / priority / must-meet).
-   - *Decision-maker interest* is the primary signal: how keen each decision
-     maker is to meet each team.
-   - *Team interest* is secondary: it breaks ties between meetings a decision
-     maker rated equally, and lets a team ask for a meeting the decision maker
-     didn't request (those are placed last, if there's room).
-3. **Schedule** — press *Generate*. You get a short table of alternative
-   boards, each scored on the objectives below, with the first one loaded onto
-   the board (columns = decision makers, rows = slots) together with headline
-   stats and a list of requested meetings that did not fit. Any cell can be
-   changed by hand; picking a team already booked elsewhere in that slot swaps
-   the two meetings. Duplicates and double bookings created by hand are
-   flagged. Setup also has a *minimum meetings per team* setting so no team
-   goes home with an empty day when there is room to avoid it.
-4. **Personal boards** — pick any team or decision maker to see their running
-   order; print it, or export everyone's at once as CSV.
+The app has four views, reached from the header (the view is in the URL hash,
+so links and back/forward work). A status strip under the header always shows
+the size of the day, any clashes, and save / open / new / undo / redo.
+
+- **People** — paste the list of teams and the list of decision makers (one
+  per line; a trailing `*` marks someone who joins online), set the number of
+  slots and optionally label them with times, and a *minimum meetings per
+  team* floor so no team goes home with an empty day when there is room to
+  avoid it. Example loaders fill in the BSD 2026 sample day or a random 26 × 26.
+- **Interest** — two grids, rows = decision makers, columns = teams, scored
+  0–3 (none / interested / priority / must-meet). *Decision makers ask* is the
+  primary signal; *Teams ask* is secondary: it breaks ties between meetings a
+  decision maker rated equally, and lets a team ask for a meeting the decision
+  maker didn't request (placed last, if there's room). A small dot in a cell
+  means the other side also asked. On narrow screens, or with *One at a time*,
+  the grid becomes one person's row with a 0–3 control per counterpart.
+- **Board** — *Generate* builds a short table of alternative boards, each
+  named by what it trades (“Best for decision makers”, “Fewer DM windows”,
+  “More team interest met”…) and scored on the objectives below; the first is
+  loaded onto the board. Columns can be decision makers or teams. Click any
+  cell to open it in the side panel: who is there, and every counterpart that
+  could be, strongest request first, marked *free*, *swap with …* (the two
+  meetings trade partners) or *already meet*. Duplicates and double bookings
+  created by hand are flagged as clashes. When no cell is selected the side
+  panel shows the board's figures and the requested meetings that did not fit.
+- **Schedules** — one running order per team or decision maker, to print one
+  at a time or all at once (one page each), or export everyone's as CSV.
+
+Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
 
-*Load sample day (BSD 2026)* in Setup fills in a realistic instance: the 13
+*BSD 2026 sample day* in People fills in a realistic instance: the 13
 projects pitched on the first day of the 30th Baltic Sea Docs (Riga,
 10 September 2026), the 17 decision makers in the room, and nine 20-minute
 slots from 15:20 to 18:00. Names and countries are from the public programme;
@@ -47,7 +57,7 @@ own country's co-productions).
 It shows the shape of a real day well: with 13 teams and 9 slots there are only
 117 seats, but the decision makers asked for 142 meetings, so the teams — not
 the decision makers — are the bottleneck, and around 25 requests cannot be met
-whatever the board. *Load random 26 × 26* is a larger synthetic stress test.
+whatever the board. *Random 26 × 26* is a larger synthetic stress test.
 
 ## How the schedule is built
 
@@ -68,7 +78,7 @@ rank the table (see [`src/lib/objectives.ts`](src/lib/objectives.ts)):
 | --- | --- |
 | must-meets missed | decision-maker must-meets (score 3) that got no meeting |
 | DM interest lost | decision-maker scores of requested meetings that did not happen, added up |
-| teams short | teams with fewer meetings than the *minimum meetings per team* set in Setup |
+| teams short | teams with fewer meetings than the *minimum meetings per team* set in People |
 | DM windows | empty slots between a decision maker's first and last meeting, summed over all decision makers |
 | team interest lost | team scores of requested meetings that did not happen, added up |
 | fillers | meetings nobody asked for |
@@ -138,8 +148,15 @@ path, so it works under a project path like `/seadocs/` without configuration.
 index.html                 Vite entry
 src/main.tsx               mounts <App/>
 src/index.css              Tailwind import and the colour/font theme
-src/App.tsx                tabs, project state (persisted to localStorage)
-src/components/            one component per panel, plus small shared UI pieces
+src/App.tsx                header, hash-routed views, project history (undo/redo), localStorage autosave
+src/components/ui.tsx      shared pieces: Button, Segmented, Panel, Figure, Name, ScorePair, score tints
+src/components/StatusStrip.tsx   summary, clashes, save / open / new / undo / redo
+src/components/PeoplePanel.tsx   rosters, slots, team floor, example loaders
+src/components/InterestPanel.tsx dense grid and one-person-at-a-time editor
+src/components/BoardPanel.tsx    generate, board grid, cell inspector, summary
+src/components/Frontier.tsx      the alternatives table, named by trade-off
+src/components/SchedulesPanel.tsx per-person running orders, print, CSV
+src/lib/history.ts         undo/redo stack over immutable project values
 src/lib/scheduler.ts       greedy selection, slot assignment (edge colouring), stats, issues
 src/lib/flow.ts            exact max-weight selection via min-cost flow
 src/lib/compact.ts         Kempe-chain slot swaps that close windows in people's days
@@ -163,7 +180,7 @@ only call its functions and render the result.
 {
   "version": 3,
   "teams": [{ "id": "t1", "name": "Team A" }],
-  "dms":   [{ "id": "d2", "name": "Fund X" }],
+  "dms":   [{ "id": "d2", "name": "Fund X", "online": true }],  // "online" only when true
   "slots": [{ "id": "s3", "label": "09:00" }, { "id": "s4", "label": "" }],  // in order; "" shows as "Slot n"
   "dmScores":   { "t1|d2": 3 },           // 1..3; zero is simply absent
   "teamScores": { "t1|d2": 1 },
@@ -174,7 +191,7 @@ only call its functions and render the result.
 ```
 
 Participants and slots have stable ids from one shared counter, so you can add,
-remove, or reorder names in Setup without the interest grid shifting under you,
+remove, or reorder names in People without the interest grid shifting under you,
 and change the slot count without meetings jumping to different times. Older
 files are converted on open: v1 (the original single-file prototype, everything
 by list position) and v2 (`slotCount` + `slotLabels`, meetings by slot

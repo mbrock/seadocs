@@ -1,69 +1,138 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { Participant } from '../lib/scheduler'
 
-export function Card({ children, muted = false, className = '' }: { children: ReactNode; muted?: boolean; className?: string }) {
-  return (
-    <section className={`mb-[18px] rounded-sm border border-line p-5 ${muted ? 'bg-paper-dim' : 'bg-cream'} ${className}`}>
-      {children}
-    </section>
-  )
-}
-
-export function CardTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-1 font-mono text-[15px] font-semibold uppercase tracking-[1.5px]">{children}</h2>
-}
-
-export function Hint({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <p className={`mb-3.5 text-[13px] italic text-muted ${className}`}>{children}</p>
-}
-
-export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
-  return (
-    <label htmlFor={htmlFor} className="mb-1.5 block font-mono text-[11px] uppercase tracking-[1px] text-teal">
-      {children}
-    </label>
-  )
-}
-
-export function Stamp({ children }: { children: ReactNode }) {
-  return <span className="ml-2.5 font-mono text-[11px] text-teal">{children}</span>
-}
-
-type Variant = 'action' | 'ghost' | 'danger'
+type Variant = 'primary' | 'default' | 'quiet' | 'danger'
 
 const buttonStyles: Record<Variant, string> = {
-  action:
-    'mt-2.5 mr-2 bg-amber px-5 py-[11px] text-[12px] font-bold text-ink hover:bg-amber-deep disabled:opacity-40 disabled:hover:bg-amber',
-  ghost:
-    'mt-2.5 mr-2 border border-teal bg-transparent px-3.5 py-2 text-[11px] text-teal hover:bg-teal hover:text-cream disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-teal',
-  danger:
-    'mt-2.5 mr-2 border border-brick bg-transparent px-3.5 py-2 text-[11px] text-brick hover:bg-brick hover:text-cream disabled:opacity-40',
+  primary: 'bg-ink text-paper hover:bg-accent disabled:hover:bg-ink',
+  default: 'border border-rule bg-paper hover:border-ink disabled:hover:border-rule',
+  quiet: 'text-muted hover:text-ink hover:underline px-1',
+  danger: 'border border-rule text-warn hover:border-warn',
 }
 
-export function Button({
-  variant = 'ghost',
-  className = '',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+export function Button({ variant = 'default', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return (
     <button
       type="button"
-      className={`cursor-pointer font-mono uppercase tracking-[1px] disabled:cursor-default ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-[0.85rem] font-semibold whitespace-nowrap disabled:cursor-default disabled:opacity-40 ${buttonStyles[variant]} ${className}`}
       {...props}
     />
   )
 }
 
-export function TabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
+/** A radio group that looks like connected buttons. */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  size = 'md',
+}: {
+  value: T
+  options: { value: T; label: ReactNode; title?: string }[]
+  onChange: (v: T) => void
+  label: string
+  size?: 'sm' | 'md'
+}) {
+  const pad = size === 'sm' ? 'px-2 py-0.5 text-[0.8rem]' : 'px-3 py-1.5 text-[0.85rem]'
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`cursor-pointer border px-[18px] py-2.5 font-mono text-[12px] uppercase tracking-[1.5px] ${
-        active ? 'border-ink bg-ink text-paper' : 'border-line bg-paper-dim text-ink opacity-55 hover:opacity-80'
-      }`}
-    >
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[3px] border border-rule bg-paper">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          title={o.title}
+          aria-checked={o.value === value}
+          onClick={() => onChange(o.value)}
+          className={`cursor-pointer font-semibold first:rounded-l-[2px] last:rounded-r-[2px] ${pad} ${
+            o.value === value ? 'bg-ink text-paper' : 'text-muted hover:bg-canvas hover:text-ink'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function Label({ children, htmlFor, className = '' }: { children: ReactNode; htmlFor?: string; className?: string }) {
+  return (
+    <label htmlFor={htmlFor} className={`eyebrow mb-1 block ${className}`}>
       {children}
-    </button>
+    </label>
+  )
+}
+
+export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <section className={`rounded-[4px] border border-rule bg-paper ${className}`}>{children}</section>
+}
+
+/** Panel title row: eyebrow-styled title on the left, controls on the right. */
+export function PanelHeader({ title, children, className = '' }: { title: ReactNode; children?: ReactNode; className?: string }) {
+  return (
+    <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule px-4 py-2.5 ${className}`}>
+      <h2 className="eyebrow text-ink">{title}</h2>
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </div>
+  )
+}
+
+/** A number with a caption, for stat rows. */
+export function Figure({ value, label, tone = 'ink' }: { value: ReactNode; label: string; tone?: 'ink' | 'warn' | 'muted' }) {
+  const colour = tone === 'warn' ? 'text-warn' : tone === 'muted' ? 'text-muted' : 'text-ink'
+  return (
+    <div className="min-w-[5rem]">
+      <div className={`font-mono text-[1.25rem] leading-tight font-semibold tabular-nums ${colour}`}>{value}</div>
+      <div className="eyebrow font-semibold normal-case tracking-normal">{label}</div>
+    </div>
+  )
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="px-4 py-8 text-center text-[0.9rem] text-muted">{children}</p>
+}
+
+export const inputClass = 'rounded-[3px] border border-rule bg-paper px-2 py-1.5 font-mono text-[0.85rem] focus:border-ink focus:outline-none'
+export const textareaClass = `${inputClass} w-full resize-y leading-[1.5]`
+
+/** Interest score 0..3 as background + text classes; rose for decision makers, sea for teams. */
+export const scoreTint = {
+  dm: ['', 'bg-rose-1 text-ink', 'bg-rose-2 text-ink', 'bg-rose-3 text-paper'],
+  team: ['', 'bg-sea-1 text-ink', 'bg-sea-2 text-ink', 'bg-sea-3 text-paper'],
+} as const
+
+/** Small mono marker "3·2": decision-maker score, then team score. Zeros are dimmed. */
+export function ScorePair({ dm, team }: { dm: number; team: number }) {
+  return (
+    <span className="font-mono text-[0.7rem] tabular-nums" title={`decision maker ${dm}, team ${team}`}>
+      <span className={dm ? '' : 'opacity-40'}>{dm}</span>
+      <span className="opacity-40">·</span>
+      <span className={team ? '' : 'opacity-40'}>{team}</span>
+    </span>
+  )
+}
+
+/**
+ * A participant's name that truncates without losing the online mark.
+ * `short` keeps only the part before the first "|" (name without affiliation).
+ */
+export function Name({ person, short = false, className = '' }: { person: Participant; short?: boolean; className?: string }) {
+  const text = short ? person.name.split('|')[0].trim() : person.name
+  return (
+    <span className={`inline-flex max-w-full min-w-0 items-baseline ${className}`} title={person.name}>
+      <span className="truncate">{text}</span>
+      <OnlineMark show={person.online} />
+    </span>
+  )
+}
+
+/** Marks a participant who joins by video. */
+export function OnlineMark({ show }: { show?: boolean }) {
+  if (!show) return null
+  return (
+    <span title="joins online" aria-label="online" className="ml-1 inline-block align-middle font-mono text-[0.7rem] font-bold text-sea-3">
+      ◌
+    </span>
   )
 }

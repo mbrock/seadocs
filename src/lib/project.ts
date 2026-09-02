@@ -40,18 +40,35 @@ export function emptyProject(): Project {
   )
 }
 
-/** One name per line, trimmed, blanks and duplicates dropped. */
-export function parseNames(text: string): string[] {
+/** A participant as typed in the roster: a name, with a trailing `*` meaning "joins online". */
+export interface RosterEntry {
+  name: string
+  online: boolean
+}
+
+/** One entry per line, trimmed, blanks and duplicate names dropped. */
+export function parseRoster(text: string): RosterEntry[] {
   const seen = new Set<string>()
-  const out: string[] = []
+  const out: RosterEntry[] = []
   for (const raw of text.split('\n')) {
-    const name = raw.trim()
+    const line = raw.trim()
+    const online = line.endsWith('*')
+    const name = (online ? line.slice(0, -1) : line).trim()
     if (name && !seen.has(name)) {
       seen.add(name)
-      out.push(name)
+      out.push({ name, online })
     }
   }
   return out
+}
+
+export function parseNames(text: string): string[] {
+  return parseRoster(text).map((e) => e.name)
+}
+
+/** The roster text for a list of participants (inverse of parseRoster). */
+export function rosterText(people: Participant[]): string {
+  return people.map((p) => (p.online ? `${p.name} *` : p.name)).join('\n')
 }
 
 export function parseLines(text: string): string[] {
@@ -73,16 +90,23 @@ export function participantName(project: Project, id: Id): string {
 }
 
 /** Replace the participant lists, keeping ids (and so scores) for names that still exist. */
-export function withParticipants(project: Project, teamNames: string[], dmNames: string[]): Project {
+export function withParticipants(project: Project, teams: (RosterEntry | string)[], dms: (RosterEntry | string)[]): Project {
   const counter = { next: project.nextId }
-  const teams = reconcile(project.teams, teamNames, 't', counter)
-  const dms = reconcile(project.dms, dmNames, 'd', counter)
-  return prune({ ...project, teams, dms, nextId: counter.next })
+  const entry = (e: RosterEntry | string): RosterEntry => (typeof e === 'string' ? { name: e, online: false } : e)
+  return prune({
+    ...project,
+    teams: reconcile(project.teams, teams.map(entry), 't', counter),
+    dms: reconcile(project.dms, dms.map(entry), 'd', counter),
+    nextId: counter.next,
+  })
 }
 
-function reconcile(existing: Participant[], names: string[], prefix: string, counter: { next: number }): Participant[] {
+function reconcile(existing: Participant[], entries: RosterEntry[], prefix: string, counter: { next: number }): Participant[] {
   const byName = new Map(existing.map((p) => [p.name, p]))
-  return names.map((name) => byName.get(name) ?? { id: `${prefix}${counter.next++}`, name })
+  return entries.map(({ name, online }) => {
+    const id = byName.get(name)?.id ?? `${prefix}${counter.next++}`
+    return online ? { id, name, online } : { id, name }
+  })
 }
 
 /** Keep the first `count` slots (and their meetings), appending fresh ones or dropping the tail. */

@@ -18,6 +18,8 @@ export type Id = string
 export interface Participant {
   id: Id
   name: string
+  /** Joins by video rather than in the room. Informational for now. */
+  online?: boolean
 }
 
 /** 0 = none, 1 = interested, 2 = priority, 3 = must-meet */
@@ -223,23 +225,32 @@ export function buildSchedule(input: ScheduleInput, { fillGaps = false } = {}): 
   return assignSlots(selectMeetings({ ...input, fillGaps }), input.slots)
 }
 
+export type Side = 'team' | 'dm'
+const otherSide = (side: Side): Side => (side === 'team' ? 'dm' : 'team')
+
 /**
- * Change what happens at (slot, dm). `teamId === null` frees the cell. If the
- * team is already booked with another dm in that slot, the two meetings swap.
- * Returns a new meetings array.
+ * Change who `anchor` (a team or a dm, per `side`) meets in `slot`. `partner
+ * === null` frees the cell. If the partner is already booked with someone else
+ * in that slot, the two meetings swap partners. Returns a new meetings array.
  */
-export function reassign(meetings: PlacedMeeting[], slot: Id, dmId: Id, teamId: Id | null): PlacedMeeting[] {
-  const current = meetings.find((m) => m.slot === slot && m.dm === dmId) ?? null
+export function assignCell(meetings: PlacedMeeting[], slot: Id, side: Side, anchor: Id, partner: Id | null): PlacedMeeting[] {
+  const other = otherSide(side)
+  const current = meetings.find((m) => m.slot === slot && m[side] === anchor) ?? null
   const out = meetings.filter((m) => m !== current)
-  if (teamId === null) return out
-  const clashIdx = out.findIndex((m) => m.slot === slot && m.team === teamId)
+  if (partner === null) return out
+  const clashIdx = out.findIndex((m) => m.slot === slot && m[other] === partner)
   if (clashIdx >= 0) {
     const clash = out[clashIdx]
     out.splice(clashIdx, 1)
-    if (current) out.push({ team: current.team, dm: clash.dm, slot })
+    if (current) out.push({ ...clash, [other]: current[other] })
   }
-  out.push({ team: teamId, dm: dmId, slot })
+  out.push(side === 'dm' ? { slot, dm: anchor, team: partner } : { slot, team: anchor, dm: partner })
   return out
+}
+
+/** assignCell anchored on a decision maker: change what happens at (slot, dm). */
+export function reassign(meetings: PlacedMeeting[], slot: Id, dmId: Id, teamId: Id | null): PlacedMeeting[] {
+  return assignCell(meetings, slot, 'dm', dmId, teamId)
 }
 
 export interface MeetingIndex {

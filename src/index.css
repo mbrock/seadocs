@@ -1,32 +1,76 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-ink: #1b2430;
-  --color-paper: #f6f3ec;
-  --color-paper-dim: #ede8db;
-  --color-amber: #c98a2b;
-  --color-amber-deep: #b67a20;
-  --color-amber-dim: #e7c892;
-  --color-amber-pale: #f0e4c8;
-  --color-teal: #3f6b63;
-  --color-line: #d8d0bc;
-  --color-brick: #a6432f;
-  --color-cream: #fffdf8;
-  --color-muted: #5b5548;
-  --color-faint: #c8c0ac;
+  /* Surfaces and text */
+  --color-paper: #ffffff;
+  --color-canvas: #f4f1ea;
+  --color-ink: #111517;
+  --color-muted: #667078;
+  --color-faint: #a8b0b6;
+  --color-rule: #ded8ce;
+  --color-accent: #9a3248;
+  --color-accent-soft: #f6e9ec;
+  --color-warn: #db6555;
+  --color-warn-soft: #fbe9e6;
 
-  --font-serif: Georgia, 'Iowan Old Style', serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Decision-maker interest 1..3 */
+  --color-rose-1: #f3e2e5;
+  --color-rose-2: #dfa7b2;
+  --color-rose-3: #9a3248;
+  /* Team interest 1..3 */
+  --color-sea-1: #e1eef6;
+  --color-sea-2: #9fc8e1;
+  --color-sea-3: #2d8fbd;
+
+  --font-sans: 'Public Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 @layer base {
+  html {
+    font-size: 15px;
+  }
   body {
-    @apply bg-paper text-ink font-serif antialiased;
+    @apply bg-paper text-ink font-sans antialiased;
+    line-height: 1.45;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
   }
 }
 
+@utility wrap {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 100rem;
+  padding-inline: clamp(1rem, 4vw, 3rem);
+}
+
+@utility eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+@utility vertical-text {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
 @media print {
+  html {
+    font-size: 11pt;
+  }
   body {
     background: white;
+  }
+  .print-page {
+    break-after: page;
   }
 }

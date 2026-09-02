@@ -12,7 +12,7 @@
 // and, on the team side, from where each project's money is likely to come from.
 
 import { pairKey, type Scores } from './scheduler'
-import { emptyProject, withParticipants, withScores, withSlots, type Project } from './project'
+import { emptyProject, parseRoster, withParticipants, withScores, withSlots, type Project } from './project'
 
 /** Column order for the decision-maker rows below (the pitching order that day). */
 const TEAMS = [
@@ -42,11 +42,11 @@ const DMS = [
   'Anja Dziersk | Rise and Shine, Germany', //                                   sales
   'Kateryna Feleniuk | Suspilne Ukraine, Ukraine', //                            broadcaster
   'Rebecca Heiler | goEast, Germany', //                                         festival (Central/Eastern Europe)
-  'Gunny (Gune) Hyoung | EIDF – Korea EBS International Documentary Festival, South Korea', // broadcaster + festival
+  'Gunny (Gune) Hyoung | EIDF – Korea EBS International Documentary Festival, South Korea *', // broadcaster + festival, online
   'Azra Jašarević | Taskovski, UK', //                                           sales (Eastern Europe)
   'Elīna Jēkabsone | TV3, Latvia', //                                            broadcaster (commercial)
   'Marianna Kaat | PÖFF, Estonia', //                                            festival
-  'Natsu Kawakami | NHK, Japan', //                                              broadcaster
+  'Natsu Kawakami | NHK, Japan *', //                                            broadcaster, online
   'Filipp Kruusvall | Estonian Film Institute, Estonia', //                      fund
   'Charlotte Gry Madsen | SVT, Sweden', //                                       broadcaster
   'Nevena Milašinović | Lightdox, Switzerland', //                               sales
@@ -108,7 +108,7 @@ function parseRows(rows: string[], width: number, key: (row: number, col: number
 }
 
 export function sampleProject(): Project {
-  let p = withParticipants(emptyProject(), TEAMS, DMS)
+  let p = withParticipants(emptyProject(), TEAMS, parseRoster(DMS.join('\n')))
   p = withSlots(p, SLOTS.length, SLOTS)
   const dmScores = parseRows(DM_ROWS, TEAMS.length, (d, t) => pairKey(p.teams[t].id, p.dms[d].id))
   const teamScores = parseRows(TEAM_ROWS, DMS.length, (t, d) => pairKey(p.teams[t].id, p.dms[d].id))
