@@ -8,13 +8,12 @@ import type { DisplayName } from '../lib/names'
 interface Props {
   project: Project
   onChange: Dispatch<SetStateAction<Project>>
-  generating: boolean
 }
 
 type ParticipantSide = 'teams' | 'dms'
 
 /** Two request matrices. Each side edits its own roster down the left. */
-export function SetupPanel({ project, onChange, generating }: Props) {
+export function SetupPanel({ project, onChange }: Props) {
   const names = useNames(project)
   const scheduled = new Set(project.meetings.map((meeting) => pairKey(meeting.team, meeting.dm)))
 
@@ -56,7 +55,6 @@ export function SetupPanel({ project, onChange, generating }: Props) {
         project={project}
         names={names}
         scheduled={scheduled}
-        generating={generating}
         onChange={onChange}
         onEdit={(id, text) => updateParticipant('dms', id, text)}
         onDelete={(id) => deleteParticipant('dms', id)}
@@ -69,7 +67,6 @@ export function SetupPanel({ project, onChange, generating }: Props) {
         project={project}
         names={names}
         scheduled={scheduled}
-        generating={generating}
         onChange={onChange}
         onEdit={(id, text) => updateParticipant('teams', id, text)}
         onDelete={(id) => deleteParticipant('teams', id)}
@@ -86,7 +83,6 @@ function RequestMatrix({
   project,
   names,
   scheduled,
-  generating,
   onChange,
   onEdit,
   onDelete,
@@ -98,7 +94,6 @@ function RequestMatrix({
   project: Project
   names: ReturnType<typeof useNames>
   scheduled: Set<string>
-  generating: boolean
   onChange: Dispatch<SetStateAction<Project>>
   onEdit: (id: string, text: string) => void
   onDelete: (id: string) => void
@@ -124,13 +119,12 @@ function RequestMatrix({
         <table className="mr-16 w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
-              <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px border-b border-rule bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
+              <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom font-semibold whitespace-nowrap">
                 {rowSide === 'DM' ? 'Decision maker' : 'Team'}
               </th>
               {columns.map((person) => (
                 <th key={person.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
-                  <span aria-hidden="true" className="absolute bottom-0 left-0 h-3 border-l border-rule" />
-                  <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center border-b border-rule whitespace-nowrap">
+                  <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap">
                     <span className="inline-flex translate-y-full pl-2">
                       <Name person={person} display={names.get(person.id)} variant="code" />
                     </span>
@@ -139,10 +133,10 @@ function RequestMatrix({
               ))}
             </tr>
           </thead>
-          <tbody className="outline outline-1 outline-rule">
+          <tbody>
             {rows.map((person, rowIndex) => (
               <tr key={person.id} className="group h-6">
-                <th className="sticky left-0 z-10 w-px border-l border-b border-rule bg-paper px-2 py-0 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
+                <th className="sticky left-0 z-10 w-px bg-paper px-2 py-0 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
                   <EditableParticipant
                     person={person}
                     display={names.get(person.id)}
@@ -157,10 +151,10 @@ function RequestMatrix({
                   const team = kind === 'dm' ? column.id : person.id
                   const dm = kind === 'dm' ? person.id : column.id
                   const requested = asked(asks, team, dm)
-                  const fulfilled = requested && !generating && scheduled.has(pairKey(team, dm))
+                  const fulfilled = requested && scheduled.has(pairKey(team, dm))
                   const description = `${kind === 'dm' ? 'DM' : 'Team'} request: ${person.name} asks for ${column.name}`
                   return (
-                    <td key={column.id} className="border-l border-b border-rule/70 p-0 group-hover:bg-canvas/50">
+                    <td key={column.id} className="p-0 group-hover:bg-canvas/50">
                       <button
                         type="button"
                         role="checkbox"
@@ -183,11 +177,11 @@ function RequestMatrix({
                 })}
               </tr>
             ))}
-            <tr className="h-[calc(1.5rem+1px)]">
-              <td className="sticky left-0 z-10 border-b border-rule bg-paper px-2 py-0">
+            <tr className="h-6">
+              <td className="sticky left-0 z-10 bg-paper px-2 py-0">
                 <Button variant="quiet" onClick={onAdd}>{addLabel}</Button>
               </td>
-              <td className="border-b border-rule" colSpan={Math.max(1, columns.length)} />
+              <td colSpan={Math.max(1, columns.length)} />
             </tr>
           </tbody>
         </table>

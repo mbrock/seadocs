@@ -72,6 +72,19 @@
   font-size-adjust: cap-height 0.73;
 }
 
+@keyframes scheduling-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@utility scheduling-progress {
+  animation: scheduling-progress 0.9s ease-in-out infinite;
+}
+
 /* A cell the person cannot do: thin diagonal hatching. */
 @utility hatched {
   background-image: repeating-linear-gradient(135deg, transparent 0 4px, var(--color-rule) 4px 5px);

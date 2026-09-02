@@ -13,6 +13,7 @@ interface Props {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  generating: boolean
 }
 
 /**
@@ -20,7 +21,7 @@ interface Props {
  * Everything is saved in the browser as you go; the file buttons are for
  * moving the project elsewhere. Problems on the board (repeats, double bookings) show up here too.
  */
-export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }: Props) {
+export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, generating }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState('')
   const issues = useMemo(() => findIssues(project.meetings, availabilityOfProject(project)).length, [project])
@@ -58,6 +59,14 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo }:
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
+      <span
+        role={generating ? 'progressbar' : undefined}
+        aria-label={generating ? 'Building schedule' : undefined}
+        aria-hidden={!generating}
+        className={`mr-2 h-1 w-16 overflow-hidden rounded-full bg-rule ${generating ? 'visible' : 'invisible'}`}
+      >
+        <span className="scheduling-progress block h-full w-1/3 rounded-full bg-accent" />
+      </span>
       {issues > 0 && (
         <a href="#board" className="mr-2 rounded-[2px] bg-warn px-1.5 font-semibold text-paper">
           {issues} problem{issues === 1 ? '' : 's'}

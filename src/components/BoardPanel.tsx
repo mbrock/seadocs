@@ -174,22 +174,13 @@ function Grid({
   onSelect: (c: Cell) => void
 }) {
   const { project, names, index, available } = board
-  const header = (rows: Side, divided = false) => (
+  const header = (rows: Side) => (
     <tr>
-      <th
-        className={`sticky top-0 left-0 z-30 h-6 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap ${
-          divided ? 'border-t-2 border-t-ink' : ''
-        }`}
-      >
+      <th className="sticky top-0 left-0 z-30 h-6 w-px bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap">
         {rows === 'dm' ? 'Decision makers' : 'Teams'}
       </th>
       {project.slots.map((slot) => (
-        <th
-          key={slot.id}
-          className={`sticky top-0 z-20 h-6 border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-mono font-semibold ${
-            divided ? 'border-t-2 border-t-ink' : ''
-          }`}
-        >
+        <th key={slot.id} className="sticky top-0 z-20 h-6 bg-paper px-1.5 py-0 text-left font-mono font-semibold">
           {slotLabel(project, slot.id)}
         </th>
       ))}
@@ -205,7 +196,7 @@ function Grid({
       <tr key={person.id} className="h-6">
         <th
           scope="row"
-          className="sticky left-0 z-10 w-px border-r border-b border-rule bg-paper px-1.5 py-0 text-left font-semibold whitespace-nowrap"
+          className="sticky left-0 z-10 h-6 w-px bg-paper px-1.5 py-0 text-left align-middle font-semibold leading-none whitespace-nowrap"
         >
           <Name person={person} display={names.get(person.id)} variant={rows === 'team' ? 'code' : 'short'} className="flex" />
         </th>
@@ -220,7 +211,7 @@ function Grid({
           const active = selected?.slot === slot.id && selected.anchor === person.id
           const state = partner ? partner.name : off ? 'not available' : 'free'
           return (
-            <td key={slot.id} className="border-r border-b border-rule/70 p-0">
+            <td key={slot.id} className="h-6 p-0 align-middle">
               <button
                 type="button"
                 aria-pressed={active}
@@ -253,7 +244,10 @@ function Grid({
         <thead>{header('dm')}</thead>
         <tbody>{rowsFor('dm')}</tbody>
         <tbody>
-          {header('team', true)}
+          <tr aria-hidden="true">
+            <td className="h-6" colSpan={project.slots.length + 1} />
+          </tr>
+          {header('team')}
           {rowsFor('team')}
         </tbody>
       </table>

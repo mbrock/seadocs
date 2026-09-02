@@ -5,7 +5,7 @@ import { SetupPanel } from './SetupPanel'
 
 test('Setup uses separate request matrices with editable row names', () => {
   const project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
-  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} generating={false} />)
+  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
   expect(html).toContain('aria-label="team 1"')
   expect(html).toContain('aria-label="DM 1"')
@@ -28,26 +28,21 @@ test('Setup uses separate request matrices with editable row names', () => {
   expect(html).not.toContain('Random 26')
 })
 
-test('request color persists while fulfillment checks disappear during generation', () => {
+test('request color and fulfillment check reflect the current schedule', () => {
   let project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
   project = withAsk(project, 'dm', project.teams[0].id, project.dms[0].id, true)
   project = withMeetings(project, [{ team: project.teams[0].id, dm: project.dms[0].id, slot: project.slots[0].id }])
 
-  const settled = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} generating={false} />)
-  const generating = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} generating />)
+  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
-  expect(settled).toContain('aria-checked="true"')
-  expect(settled).toContain('bg-emerald-600')
-  expect(settled).toContain('data-fulfillment-check="true"')
-  expect(generating).toContain('aria-checked="true"')
-  expect(generating).toContain('bg-emerald-600')
-  expect(generating).toContain('opacity-45')
-  expect(generating).not.toContain('data-fulfillment-check')
+  expect(html).toContain('aria-checked="true"')
+  expect(html).toContain('bg-emerald-600')
+  expect(html).toContain('data-fulfillment-check="true"')
 })
 
 test('film-team rows use board codes while retaining the full title', () => {
   const project = withParticipants(emptyProject(), ['The Crust of Europe'], ['Fund X'])
-  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} generating={false} />)
+  const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
   expect(html).toContain('title="The Crust of Europe"')
   expect(html).toContain('>Europe</span>')

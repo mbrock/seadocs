@@ -48,6 +48,7 @@ export default function App() {
               canRedo={history.future.length > 0}
               onUndo={() => setHistory(undo)}
               onRedo={() => setHistory(redo)}
+              generating={generating}
             />
           </div>
         </div>
@@ -55,7 +56,7 @@ export default function App() {
 
       <main className="wrap flex-1 py-3 print:p-0">
         <div className="flex flex-wrap items-start justify-evenly gap-4">
-          <SetupPanel project={project} onChange={setProject} generating={generating} />
+          <SetupPanel project={project} onChange={setProject} />
           <BoardPanel
             project={project}
             onChange={setProject}
