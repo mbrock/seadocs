@@ -38,6 +38,6 @@ describe('optimize on the demo', () => {
     console.log('dm gaps before', gapsOf(plain, input.slots, 'dm'), 'after', gapsOf(compact, input.slots, 'dm'), '| team gaps', gapsOf(plain, input.slots, 'team'), '->', gapsOf(compact, input.slots, 'team'))
     expect(gapsOf(compact, input.slots, 'dm')).toBeLessThanOrEqual(gapsOf(plain, input.slots, 'dm'))
     expect(findIssues(compact)).toEqual([])
-    expect(measure(input, compact).fillers).toBe(measure(input, plain).fillers)
+    expect(measure(input, compact).dmIdle).toBe(measure(input, plain).dmIdle)
   })
 })

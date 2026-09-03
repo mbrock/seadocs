@@ -2,12 +2,12 @@ import { describe, expect, test } from 'vitest'
 import { addToFrontier, compareLex, dominates, gapsOf, measure, type Objectives } from './objectives'
 import { compactSlots, participantsWithWindows } from './compact'
 import { optimize } from './optimize'
-import { assignSlots, findIssues, type Asks, type Participant, type PlacedMeeting } from './scheduler'
+import { assignSlots, findIssues, selectMeetings, type Asks, type Participant, type PlacedMeeting } from './scheduler'
 import { emptyProject, withParticipants, withSlotCount } from './project'
 import { numberedSlots, seededRandom } from './fixtures'
 
 const people = (prefix: string, n: number): Participant[] => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix}${i + 1}` }))
-const zero: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+const zero: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, dmIdle: 0, teamGaps: 0 }
 
 describe('objectives', () => {
   test('measure counts each dimension', () => {
@@ -21,7 +21,7 @@ describe('objectives', () => {
     const meetings: PlacedMeeting[] = [
       { team: 't1', dm: 'd1', slot: 's1' },
       { team: 't2', dm: 'd1', slot: 's4' }, // d1 idle in s2, s3 → 2 windows
-      { team: 't3', dm: 'd2', slot: 's2' }, // nobody asked → filler
+      { team: 't3', dm: 'd2', slot: 's2' }, // nobody asked, still counts as a meeting
     ]
     expect(measure(input, meetings)).toEqual({
       missedDm: 1, // t1|d2
@@ -29,7 +29,7 @@ describe('objectives', () => {
       teamsEmpty: 0,
       dmGaps: 2,
       missedTeam: 1, // t2|d2
-      fillers: 1,
+      dmIdle: 5, // d1 sits out 2 of 4 slots, d2 sits out 3
       teamGaps: 0,
     })
     expect(measure(input, meetings.slice(0, 1)).teamsEmpty).toBe(2)
@@ -91,8 +91,8 @@ describe('compactSlots', () => {
     let improvedSomewhere = false
     for (const seed of [1, 2, 4]) {
       const input = busyProject(seed)
-      const front = optimize(input)
-      const selection = front[0].meetings.map(({ team, dm }) => ({ team, dm }))
+      // A requests-only selection leaves seats empty, so there are windows to close.
+      const selection = selectMeetings(input)
       const plain = assignSlots(selection, input.slots)
       const compact = compactSlots(plain, input.slots)
       expect(compact.map(({ team, dm }) => `${team}|${dm}`).sort()).toEqual(plain.map(({ team, dm }) => `${team}|${dm}`).sort())

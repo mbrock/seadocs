@@ -32,7 +32,8 @@ no saved browser state, the sample day is loaded automatically.
   `Title = Code` or `Name = Code` to choose the short form yourself; a
   trailing `*` marks someone who joins online. Meeting times come from the loaded
   project and are not currently editable in the UI. Not asked is not a refusal;
-  it only means nobody asked. Decision-maker
+  it only means nobody asked, and the board still fills those seats so that
+  everyone gets to meet. Decision-maker
   interest is the primary signal; team interest is
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
@@ -93,11 +94,13 @@ least one meeting, team requests, and total meetings. Each proven optimum or
 time-limited incumbent value becomes the next stage's constraint. Phase B
 rebuilds the full selectable pair × slot model with DM internal-gap variables,
 then minimizes DM gaps and finally favors unchanged current-board cells. It
-does not freeze Phase A pair choices. Because the present project
-format has binary asks but no explicit filler consent or per-DM cap, generation
-allows at most one meeting per DM that the DM did not request; this
-is the deliberately conservative burden guardrail for team-only and filler
-meetings.
+does not freeze Phase A pair choices. There is no cap on meetings a decision
+maker did not ask for: everyone is at the event to meet, so a request is a
+priority, not a permission. The request stages run first and are locked in as
+floors, then the "total meetings" stage fills every remaining seat with
+introductions nobody asked for. On the board these fillers are the cells
+without a coloured dot, so you can see at a glance which meetings were wanted
+and which are the mingling.
 
 Current project files do not distinguish locks/pins from editable board cells,
 so manual cells are stability preferences, not hidden hard locks. If lock/pin

@@ -55,10 +55,10 @@ function buildModel(api: Api, input: AdvancedSolverInput, phaseB: boolean, floor
       const vars = input.teams.map((team) => x.get(at(team.id, dm.id, slot.id))).filter((v): v is BoolVar => !!v)
       if (vars.length) model.add(sum(api, vars).le(1))
     }
-    // With binary interest data, one non-DM-requested meeting is the strongest
-    // explicit burden guardrail the current app can support without inventing consent.
-    const extras = input.teams.map((team) => pairKey(team.id, dm.id)).filter((key) => !(key in input.dmAsks)).map((key) => y.get(key)).filter((v): v is BoolVar => !!v)
-    if (extras.length) model.add(sum(api, extras).le(1))
+    // No cap on meetings the DM did not ask for: everyone is at the event to
+    // meet, so a request is a priority, not a permission. Requested meetings
+    // are secured by the earlier stages; the "total meetings" stage then fills
+    // whatever room is left with introductions nobody asked for.
   }
 
   const pairs = [...y.entries()]

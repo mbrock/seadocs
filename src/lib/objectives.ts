@@ -21,8 +21,8 @@ export interface Objectives {
   dmGaps: number
   /** Team asks that did not get a meeting. */
   missedTeam: number
-  /** Meetings that neither side asked for. */
-  fillers: number
+  /** Slots a decision maker could do but sits out, summed. Everyone is there to meet, so an empty seat is a loss even when nobody asked for it. */
+  dmIdle: number
   /** Idle slots inside a team's day, summed. */
   teamGaps: number
 }
@@ -33,15 +33,17 @@ export type ObjectiveKey = keyof Objectives
  * In priority order: this is also the tie-break order used to pick a default.
  * Decision-maker asks come first because the decision makers are the guests
  * whose time the day is organised around; team asks are heard once every
- * decision maker has been served as well as possible.
+ * decision maker has been served as well as possible. Everyone is at the
+ * event to meet, so a full room outranks a tidy one: empty seats count
+ * before windows.
  */
 export const OBJECTIVES: { key: ObjectiveKey; label: string; hint: string }[] = [
   { key: 'missedDm', label: 'DM asks', hint: 'Decision-maker asks that got no meeting' },
   { key: 'dmsUnderHalf', label: 'DMs under half', hint: 'Decision makers who got fewer than half of the meetings they asked for' },
   { key: 'teamsEmpty', label: 'teams left out', hint: 'Teams with no meeting at all' },
-  { key: 'dmGaps', label: 'DM windows', hint: 'Empty slots between a decision maker’s first and last meeting, added up over all decision makers' },
   { key: 'missedTeam', label: 'team asks', hint: 'Team asks that got no meeting' },
-  { key: 'fillers', label: 'fillers', hint: 'Meetings nobody asked for' },
+  { key: 'dmIdle', label: 'empty seats', hint: 'Slots a decision maker could do but has no meeting in, added up over all decision makers' },
+  { key: 'dmGaps', label: 'DM windows', hint: 'Empty slots between a decision maker’s first and last meeting, added up over all decision makers' },
   { key: 'teamGaps', label: 'team windows', hint: 'Empty slots between a team’s first and last meeting, added up over all teams' },
 ]
 
@@ -87,7 +89,7 @@ export function measure(input: ScheduleInput, meetings: PlacedMeeting[]): Object
   const teamsMet = new Set(meetings.map((m) => m.team))
   const available = availabilityOf([...input.teams, ...input.dms])
 
-  const o: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, fillers: 0, teamGaps: 0 }
+  const o: Objectives = { missedDm: 0, dmsUnderHalf: 0, teamsEmpty: 0, dmGaps: 0, missedTeam: 0, dmIdle: 0, teamGaps: 0 }
   const asked = new Map<Id, [number, number]>()
   for (const p of allPairs(input)) {
     const got = met.has(pairKey(p.team, p.dm))
@@ -97,15 +99,15 @@ export function measure(input: ScheduleInput, meetings: PlacedMeeting[]): Object
       if (got) a[1]++
       asked.set(p.dm, a)
     }
-    if (got) {
-      if (!p.dmAsked && !p.teamAsked) o.fillers++
-    } else {
+    if (!got) {
       if (p.dmAsked) o.missedDm++
       if (p.teamAsked) o.missedTeam++
     }
   }
   for (const [n, k] of asked.values()) if (2 * k < n) o.dmsUnderHalf++
   o.teamsEmpty = input.teams.filter((t) => !teamsMet.has(t.id)).length
+  const seats = input.dms.reduce((n, dm) => n + input.slots.filter((s) => available(dm.id, s.id)).length, 0)
+  o.dmIdle = seats - meetings.length
   o.dmGaps = gapsOf(meetings, input.slots, 'dm', available)
   o.teamGaps = gapsOf(meetings, input.slots, 'team', available)
   return o

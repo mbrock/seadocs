@@ -30,17 +30,30 @@ describe('integrated CP-SAT model', () => {
     expect(result.kind).toBe('optimal')
   })
 
-  test('keeps a useful team-requested extra within the DM burden guardrail', async () => {
+  test('fills the room the requests leave: a DM meets every team that has a free slot', async () => {
     const input = {
       teams: [participant('t1'), participant('t2'), participant('t3')], dms: [participant('d1')], slots: numberedSlots(3),
-      dmAsks: { 't1|d1': true } as const, teamAsks: { 't2|d1': true, 't3|d1': true } as const,
+      dmAsks: { 't1|d1': true } as const, teamAsks: { 't2|d1': true } as const,
     }
     const result = await solve(input)
     expect(validateAdvancedBoard(input, result.meetings ?? [])).toEqual([])
     const metrics = advancedMetrics({ ...input, currentBoard: [], fallbackHint: [] }, result.meetings ?? [])
     expect(metrics.dmRequested).toBe(1)
     expect(metrics.teamRequested).toBe(1)
-    expect(metrics.total).toBe(2)
+    expect(metrics.total).toBe(3) // t3 is nobody's request but there is a seat, so they meet
+  })
+
+  test('requests come first when seats are scarce; fillers only take what is left', async () => {
+    const input = {
+      teams: [participant('t1'), participant('t2'), participant('t3')], dms: [participant('d1'), participant('d2')], slots: numberedSlots(2),
+      dmAsks: { 't1|d1': true, 't2|d2': true } as const, teamAsks: { 't3|d1': true } as const,
+    }
+    const result = await solve(input)
+    const met = new Set((result.meetings ?? []).map((m) => `${m.team}|${m.dm}`))
+    expect(met.has('t1|d1')).toBe(true)
+    expect(met.has('t2|d2')).toBe(true)
+    expect(met.has('t3|d1')).toBe(true)
+    expect(result.meetings).toHaveLength(4) // both DMs sit in both slots
   })
 
   test('status is only optimal when every stage was proven', async () => {
