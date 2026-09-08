@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { askedBy } from '../lib/describe'
-import { asksFor, availabilityOfProject, participants, slotLabel, withAvailability, withMeetings, type Asked, type Project } from '../lib/project'
+import { asksFor, availabilityOfProject, freeSlotsForMeeting, participants, slotLabel, withAvailability, withMeetings, withMeetingSlot, type Asked, type Project } from '../lib/project'
 import { assignCell, assignEffect, indexMeetings, isRefused, meetingAt, otherSide, pairOf, type AssignEffect, type Id, type Side } from '../lib/scheduler'
 import { Button, Name, RequestMark, type UpdateProject } from './ui'
 import { sideStyle, useNames, type Names, type ParticipantName } from './useNames'
@@ -65,6 +65,8 @@ export function Inspector({ project, cell, onChange, onClose }: { project: Proje
         </Button>
       </div>
 
+      <p className="border-b border-rule px-2 py-2 text-muted">Changes here never rebuild the board. Remove leaves both people free; a replacement only affects the meetings described below. Rebuilding later can bring removed meetings back.</p>
+
       {!available(anchor, slot) ? (
         <div className="flex items-center justify-between gap-3 px-2 py-1.5">
           <div>
@@ -77,6 +79,16 @@ export function Inspector({ project, cell, onChange, onClose }: { project: Proje
         <>
           <div className="border-b border-rule px-2 py-1.5">
             {meeting ? <Meets who={names(meeting[other])} asked={asksFor(project, meeting)} onRemove={() => book(null)} /> : <div className="text-muted">Free</div>}
+            {meeting && <label className="mt-2 block text-muted">Move this meeting
+              <select aria-label="Move this meeting" className="ml-2 max-w-full rounded border border-rule bg-paper p-1 text-ink" value="" onChange={(e) => {
+                const target = e.target.value
+                if (target) { onChange((p) => withMeetingSlot(p, meeting, target)); onClose() }
+              }}>
+                <option value="">Choose a time when both are free…</option>
+                {freeSlotsForMeeting(project, meeting).map((s) => <option key={s.id} value={s.id}>{slotLabel(project, s.id)}</option>)}
+              </select>
+              <span className="mt-1 block">Only free, available times are listed. Other meetings stay put.</span>
+            </label>}
           </div>
 
           <div className="px-2 py-1.5">

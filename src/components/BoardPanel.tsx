@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { askedBy } from '../lib/describe'
-import { asksFor, availabilityOfProject, hasAsks, participants, slotLabel, type Asked, type Project } from '../lib/project'
+import { asksFor, availabilityOfProject, participants, slotLabel, type Asked, type Project } from '../lib/project'
 import { indexMeetings, meetingAt, otherSide, pairKey, type Side } from '../lib/scheduler'
 import { Inspector, type Cell } from './Inspector'
 import { Name, RequestMark, type UpdateProject } from './ui'
@@ -26,11 +26,11 @@ export function BoardPanel({ project, onChange }: Props) {
   return (
     <>
       <section id="board" className="w-full scroll-mt-12">
-        {project.meetings.length ? (
+        {project.teams.length && project.dms.length ? (
           <Grid project={project} selected={selected} onSelect={setCell} />
         ) : (
           <p className="px-2 py-3 text-center text-muted">
-            {!project.teams.length || !project.dms.length ? 'Add people and requests first.' : !hasAsks(project) ? 'Nobody has asked for a meeting yet.' : 'Building the board…'}
+            Add decision makers and film teams in Edit setup first.
           </p>
         )}
       </section>

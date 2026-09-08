@@ -389,3 +389,16 @@ export function withAsks(project: Project, dmAsks: Asks, teamAsks: Asks): Projec
 export function withMeetings(project: Project, meetings: PlacedMeeting[]): Project {
   return { ...project, meetings }
 }
+
+/** Move a single meeting only when both participants are free and available. */
+export function freeSlotsForMeeting(project: Project, meeting: PlacedMeeting): Slot[] {
+  const available = availabilityOfProject(project)
+  return project.slots.filter((s) => s.id !== meeting.slot && available(meeting.team, s.id) && available(meeting.dm, s.id) &&
+    !project.meetings.some((m) => m.slot === s.id && (m.team === meeting.team || m.dm === meeting.dm)))
+}
+
+export function withMeetingSlot(project: Project, meeting: PlacedMeeting, slot: Id): Project {
+  if (!freeSlotsForMeeting(project, meeting).some((s) => s.id === slot)) return project
+  return withMeetings(project, project.meetings.map((m) =>
+    m.team === meeting.team && m.dm === meeting.dm && m.slot === meeting.slot ? { ...m, slot } : m))
+}

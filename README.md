@@ -17,30 +17,37 @@ save / export / open / new, the sample loader, and the action that clears all
 requests, and shows a problem count linking to the board when it has one. With
 no saved browser state, the sample day is loaded automatically.
 
-- **Setup** — two request matrices, one for each side. Decision makers edit
-  their names and requests down the rows of the first; film teams do the same
-  in the second. They sit beside each other when the viewport is wide enough
-  and wrap otherwise. The other side appears as read-only columns. Adding, editing,
-  deleting, and changing a request all take effect immediately. A green or blue
+- **Setup** — “Edit setup” opens three multiline lists on the same page:
+  decision makers, film teams, and time slots, plus the event/day title.
+  Apply saves them as one undoable change; Cancel discards the draft.
+  Line position preserves identity, so simultaneous renames keep requests,
+  availability and meetings. Inserting, deleting or reordering lines reassigns
+  those positions; removed trailing entries are pruned. Blank lines and duplicate
+  participant names are ignored. There must be 1–60 time slots.
+  Two read-only-name request matrices sit beside each other when the viewport
+  is wide enough and wrap otherwise. Changing a request takes effect immediately
+  but does not rebuild the board. A green or blue
   square means that side requested the meeting; its check mark means the current
-  schedule fulfills it. Checks disappear while a replacement schedule is solving.
+  schedule fulfills it.
   Names use
   `Name | Organisation, Country`; the country becomes a small tag
   and names are shortened to "J. Cornejo" in dense tables, while project titles
   get a one-word code — "The Crust of Europe" → Europe, "Evening School" →
   Evening — the way a crew refers to films it knows by heart; write
   `Title = Code` or `Name = Code` to choose the short form yourself; a
-  trailing `*` marks someone who joins online. Meeting times come from the loaded
-  project and are not currently editable in the UI. Not asked is not a refusal;
+  trailing `*` marks someone who joins online. Not asked is not a refusal;
   it only means nobody asked, and the board still fills those seats so that
   everyone gets to meet. Decision-maker
   interest is the primary signal; team interest is
   secondary: it is heard once every decision maker has been served as well as
   possible, and lets a team ask for a meeting the decision maker didn't request
   (placed if there's room).
-- **Board** — changing a request automatically starts the local CP-SAT solver,
-  giving each of its seven objective stages up to one second. A further input
-  change hard-cancels the current Worker and immediately starts a fresh solve.
+- **Board** — “Build schedule” explicitly starts the local CP-SAT solver,
+  giving each of its seven objective stages up to one second. Rebuilding an
+  existing board asks for confirmation: meetings may move and removed meetings
+  may return. The whole build is undoable. Any project edit or Undo cancels an
+  in-flight build; Cancel build leaves the existing board intact. No automatic
+  solving happens on loading, editing requests, or changing availability.
   Both board orientations are always visible: decision makers × slots and teams
   × slots. A green dot means the decision maker asked for the meeting, a blue
   dot means the team asked, and a hatched cell is a slot that person cannot do.
@@ -57,6 +64,11 @@ no saved browser state, the sample day is loaded automatically.
   the cell (and removes any meeting there). Export is disabled while problems
   remain. The solver runs entirely in a Web Worker in this browser and never
   uploads roster or interest data.
+- **Individual schedules** — select any decision maker or film team below the
+  board to preview their schedule, copy or download plain text, or download a
+  formatted RTF document for Word / Google Docs. Exports use the current board,
+  full names, the event title, and every slot in order, including free and
+  unavailable times. The whole-board CSV remains available in the toolbar.
 Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
@@ -78,7 +90,7 @@ or so decision-maker asks cannot be met whatever the board.
 
 ## How the schedule is built
 
-The first automatic solve lazily loads the portable WebAssembly build of
+The first requested build lazily loads the portable WebAssembly build of
 `cpsat-js@1.3.0` in an app-owned module Worker. The model decides whether each
 team × decision-maker pair meets **and** its slot together, so availability,
 one meeting per person per slot, and pair uniqueness are hard constraints
@@ -102,8 +114,13 @@ introductions nobody asked for. On the board these fillers are the cells
 without a coloured dot, so you can see at a glance which meetings were wanted
 and which are the mingling.
 
-Current project files do not distinguish locks/pins from editable board cells,
-so manual cells are stability preferences, not hidden hard locks. If lock/pin
+Manual edits never invoke the solver: Remove leaves both participants free;
+“Move this meeting” offers times when both people are free and available;
+replacement candidates describe their local swap or displacement. The entire
+board stays stable until an explicit rebuild, rather than requiring pins for
+ordinary editing. Current project files do not distinguish locks/pins from
+editable board cells, so on rebuild manual cells are stability preferences,
+not hidden hard locks. If lock/pin
 fields are added later they must become explicit hard constraints and validator
 checks. The current fairness compromise is similarly intentional: v1 maximizes
 the number of teams served rather than using the old “DMs under half” threshold.
@@ -139,9 +156,11 @@ src/index.css              Tailwind + Public Sans import and the colour/font the
 src/App.tsx                page layout, project history (undo/redo), localStorage autosave
 src/components/ui.tsx      shared pieces: Button, RequestMark, Name
 src/components/useNames.ts       display names by participant id
-src/components/useAutoSolve.ts   re-solves in a Worker when the inputs change; reports progress
+src/components/useScheduleSolve.ts explicitly requested Worker solve; cancellation and progress
 src/components/Toolbar.tsx       solver progress, problems, undo / redo, save / export / open / new / sample
-src/components/SetupPanel.tsx    editable participant/request matrices
+src/components/DaySetup.tsx      bulk roster, title and time-slot editor
+src/components/SetupPanel.tsx    request matrices with read-only names
+src/components/ParticipantExport.tsx individual schedule preview and downloads
 src/components/BoardPanel.tsx    both board grids and the selected cell
 src/components/Inspector.tsx     the selected cell: who is there and who could be
 src/lib/history.ts         undo/redo stack over immutable project values

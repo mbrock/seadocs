@@ -3,19 +3,19 @@ import { expect, test } from 'vitest'
 import { emptyProject, withAsk, withMeetings, withParticipants } from '../lib/project'
 import { SetupPanel } from './SetupPanel'
 
-test('Setup uses separate request matrices with editable row names', () => {
+test('Setup uses separate request matrices with read-only row names', () => {
   const project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
-  expect(html).toContain('aria-label="team 1"')
-  expect(html).toContain('aria-label="DM 1"')
-  expect(html.match(/aria-label="team 1"/g)).toHaveLength(1)
-  expect(html.match(/aria-label="DM 1"/g)).toHaveLength(1)
+  expect(html).not.toContain('<input')
+  expect(html).not.toContain('Delete')
+  expect(html).toContain('title="Alpha"')
+  expect(html).toContain('title="Fund X"')
   expect(html).toContain('-rotate-45')
   expect(html).toContain('DM request: Fund X asks for Alpha')
   expect(html).toContain('Team request: Alpha asks for Fund X')
-  expect(html).toContain('+ film team')
-  expect(html).toContain('+ DM')
+  expect(html).not.toContain('+ film team')
+  expect(html).not.toContain('+ DM')
   expect(html.match(/<tr/g)).toHaveLength(4)
   expect(html).not.toContain('bg-rule')
   expect(html).toContain('outline-rule')
@@ -25,7 +25,8 @@ test('Setup uses separate request matrices with editable row names', () => {
   expect(html).not.toContain('Load sample day')
   expect(html).not.toContain('Apply edits')
   expect(html).not.toContain('Paste names')
-  expect(html).not.toContain('Decision-maker requests')
+  expect(html).toContain('Decision-maker requests')
+  expect(html).toContain('Film-team requests')
   expect(html).not.toContain('Team requests')
   expect(html).not.toContain('Clear requests')
   expect(html).not.toContain('Move up')
