@@ -17,6 +17,14 @@ save / export / open / new, the sample loader, and the action that clears all
 requests, and shows a problem count linking to the board when it has one. With
 no saved browser state, the sample day is loaded automatically.
 
+- **Two festival days** — Day 1 / Day 2 share one decision-maker roster and
+  are saved, opened, and autosaved together in one file. Each day has its own
+  film teams, title, requests, time slots, availability and board. Renaming a
+  decision maker updates both days; removing one prunes their meetings and
+  requests on both days. Building or editing a board only affects the selected
+  day. Switching days cancels a running build. Undo/redo covers the whole festival.
+  Existing single-day files become Day 1 without changing their times or board;
+  Day 2 starts with no teams or meetings.
 - **Setup** — “Edit setup” opens three multiline lists on the same page:
   decision makers, film teams, and time slots, plus the event/day title.
   Apply saves them as one undoable change; Cancel discards the draft.
@@ -24,6 +32,11 @@ no saved browser state, the sample day is loaded automatically.
   availability and meetings. Inserting, deleting or reordering lines reassigns
   those positions; removed trailing entries are pruned. Blank lines and duplicate
   participant names are ignored. There must be 1–60 time slots.
+  New days default to twelve 15-minute slots from 15:00 (an editable starting
+  point, not an assumed festival timetable). The 15-minute generator accepts a
+  start time and slot count; the resulting time ranges can be edited to leave
+  breaks. There is no 27-person roster limit; the solver is tested with 27
+  decision makers and 13 film teams per day.
   Two read-only-name request matrices sit beside each other when the viewport
   is wide enough and wrap otherwise. Changing a request takes effect immediately
   but does not rebuild the board. A green or blue
@@ -68,7 +81,9 @@ no saved browser state, the sample day is loaded automatically.
   board to preview their schedule, copy or download plain text, or download a
   formatted RTF document for Word / Google Docs. Exports use the current board,
   full names, the event title, and every slot in order, including free and
-  unavailable times. The whole-board CSV remains available in the toolbar.
+  unavailable times. Decision-maker exports include both days with explicit day
+  headings; film-team exports include only the selected day. The toolbar CSV
+  exports the selected day, while “Save both days” saves the whole festival.
 Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 
 ## The sample day
@@ -185,7 +200,17 @@ src/lib/*.test.ts          Vitest suites
 The scheduling and model code has no React or DOM dependency; the components
 only call its functions and render the result.
 
-### Project file format (v5)
+### Festival file format (v6)
+
+The file has `version: 6`, a single `dms` array (names/codes/online flags), and
+exactly two `days`. Each day contains `title`, `teams`, `slots`, `dmAsks`,
+`teamAsks`, `meetings`, `nextId`, and `dmUnavailable` (DM ID → slot IDs).
+Asks are objects mapping pair keys to `true`. Team availability remains on each
+day's team records. Shared DM records never contain day-specific availability.
+`festival.ts` adapts a day to the single-day solver model; `festivalPersist.ts`
+handles festival files and imports v1–v5 files through the legacy loader.
+
+### Legacy single-day file format (v5, still accepted on Open)
 
 ```jsonc
 {

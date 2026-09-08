@@ -1,6 +1,8 @@
 import { useRef, useState, type CSSProperties } from 'react'
-import { availabilityOfProject, emptyProject, hasAsks, withAsks, type Project } from '../lib/project'
-import { clearLocal, deserialize, serialize } from '../lib/persist'
+import { availabilityOfProject, hasAsks, withAsks, type Project } from '../lib/project'
+import { clearLocal } from '../lib/persist'
+import { deserializeFestival, serializeFestival } from '../lib/festivalPersist'
+import { emptyFestival, festivalFromProject, type Festival, type DayIndex } from '../lib/festival'
 import { findIssues } from '../lib/scheduler'
 import { boardCsv, download } from '../lib/csv'
 import { sampleProject } from '../lib/sample'
@@ -8,6 +10,9 @@ import type { SolverStatusInfo } from '../lib/advancedSolver'
 import { Button, type UpdateProject } from './ui'
 
 interface Props {
+  festival: Festival
+  onReplace: (festival: Festival) => void
+  day: DayIndex
   project: Project
   onChange: UpdateProject
   canUndo: boolean
@@ -21,35 +26,35 @@ interface Props {
  * The header bar: solver progress, problems on the board, undo / redo, and the
  * file actions. The project autosaves in the browser; files are for moving it elsewhere.
  */
-export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, solverStatus }: Props) {
+export function Toolbar({ festival, onReplace, day, project, onChange, canUndo, canRedo, onUndo, onRedo, solverStatus }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState('')
   const issues = findIssues(project.meetings, availabilityOfProject(project)).length
-  const isEmpty = project.teams.length === 0 && project.dms.length === 0
+  const isEmpty = festival.days.every((d) => d.teams.length === 0) && festival.dms.length === 0
 
-  const replaceWith = (next: Project, question: string, done: string) => {
+  const replaceWith = (next: Festival, question: string, done: string) => {
     if (!isEmpty && !confirm(question)) return
-    onChange(() => next)
+    onReplace(next)
     setNote(done)
   }
 
   const save = () => {
-    download(`meeting-board-${new Date().toISOString().slice(0, 10)}.json`, serialize(project), 'application/json')
+    download(`meeting-board-festival-${new Date().toISOString().slice(0, 10)}.json`, serializeFestival(festival), 'application/json')
     setNote('saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
   }
 
   const open = async (file: File) => {
     try {
-      replaceWith(deserialize(await file.text()), 'Replace the current project with this file? You can Undo afterwards.', 'opened ' + file.name)
+      replaceWith(deserializeFestival(await file.text()), 'Replace both festival days with this file? You can Undo afterwards.', 'opened ' + file.name)
     } catch (err) {
       setNote(`could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
   const reset = () => {
-    if (!confirm('Start a new project? This clears participants, interest and the board from this browser.')) return
+    if (!confirm('Start a new festival? This clears participants, requests and boards for BOTH days. You can Undo afterwards.')) return
     clearLocal()
-    onChange(() => emptyProject())
+    onReplace(emptyFestival())
     setNote('new project')
   }
 
@@ -75,21 +80,21 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
       <Button variant="quiet" onClick={() => fileInput.current?.click()} title="Open a project file">
         Open
       </Button>
-      <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download the project as a file">
-        Save
+      <Button variant="quiet" onClick={save} disabled={isEmpty} title="Download both festival days in one file">
+        Save both days
       </Button>
       <Button
         variant="quiet"
         disabled={project.meetings.length === 0 || issues > 0}
         title={issues > 0 ? 'Fix the problems first' : 'Export the board as a spreadsheet'}
-        onClick={() => download('meeting-board.csv', boardCsv(project), 'text/csv')}
+        onClick={() => download(`meeting-board-day-${day + 1}.csv`, boardCsv(project), 'text/csv')}
       >
-        Export
+        Export day {day + 1} CSV
       </Button>
       <Divider />
       <Button
         variant="quiet"
-        onClick={() => replaceWith(sampleProject(), 'Replace the current project with the sample? You can Undo afterwards.', 'sample loaded')}
+        onClick={() => replaceWith(festivalFromProject(sampleProject()), 'Replace both days with the sample (Day 2 has no teams)? You can Undo afterwards.', 'sample loaded')}
         title="Replace the current project with the sample day"
       >
         Sample
@@ -98,7 +103,7 @@ export function Toolbar({ project, onChange, canUndo, canRedo, onUndo, onRedo, s
         variant="quiet"
         disabled={!hasAsks(project)}
         onClick={() => onChange((p) => withAsks(p, {}, {}))}
-        title="Clear every decision-maker and team request"
+        title={`Clear every decision-maker and team request for day ${day + 1} only`}
       >
         <span className="sm:hidden">Clear</span>
         <span className="hidden sm:inline">Clear requests</span>
