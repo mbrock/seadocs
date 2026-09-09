@@ -9,7 +9,7 @@ test('Setup uses separate request matrices with read-only row names', () => {
 
   expect(html).not.toContain('<input')
   expect(html).not.toContain('Delete')
-  expect(html).toContain('title="Alpha"')
+  expect(html.match(/>Alpha<\/span>/g)).toHaveLength(2)
   expect(html).toContain('title="Fund X"')
   expect(html).toContain('-rotate-45')
   expect(html).toContain('DM request: Fund X asks for Alpha')
@@ -57,10 +57,13 @@ test('both matrices show the combined two-sided request state', () => {
   expect(html.match(/opacity-45/g)).toHaveLength(2)
 })
 
-test('film-team rows use board codes while retaining the full title', () => {
-  const project = withParticipants(emptyProject(), ['The Crust of Europe'], ['Fund X'])
+test('both request matrices display full film titles instead of generated or custom codes', () => {
+  const project = withParticipants(emptyProject(), [{ name: 'The Crust of Europe', code: 'EUROPE', online: false }], ['Fund X'])
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
 
-  expect(html).toContain('title="The Crust of Europe"')
-  expect(html).toContain('>Europe</span>')
+  expect(html.match(/>The Crust of Europe<\/span>/g)).toHaveLength(2)
+  expect(html).not.toContain('>EUROPE</span>')
+  expect(html).not.toContain('>Europe</span>')
+  expect(html).toContain('margin-right:16.5rem')
+  expect(html).toContain('height:16.5rem')
 })

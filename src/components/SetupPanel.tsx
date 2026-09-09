@@ -24,14 +24,14 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
   const rows = participants(project, side)
   const columns = participants(project, otherSide(side))
   const scheduled = new Set(project.meetings.map((m) => pairKey(m.team, m.dm)))
-  // A 45° label rises by roughly 0.7 of its width; reserve what the longest one needs.
-  const longestHeader = Math.max(0, ...columns.map((p) => names(p.id)).map(({ tag, code }) => Array.from(`${tag} ${code}`.trim()).length))
-  const headerHeight = `${Math.max(5, 2.25 + longestHeader * 0.38)}rem`
+  // Reserve roughly one em per character before the 45° rotation, including wide glyphs.
+  const longestHeader = Math.max(0, ...columns.map((p) => names(p.id)).map(({ side, name, tag, code }) => Array.from(side === 'team' ? name : `${tag} ${code}`.trim()).length))
+  const headerHeight = `${Math.max(5, 2.25 + longestHeader * 0.75)}rem`
 
   return (
     <section className="w-fit max-w-full min-w-0">
       <div className="overflow-auto pb-1">
-        <table className="mr-16 w-max border-separate border-spacing-0">
+        <table style={{ marginRight: headerHeight }} className="w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
             <tr>
               <th style={{ height: headerHeight }} className="sticky left-0 z-30 w-px bg-paper px-2 pb-1 text-left align-bottom whitespace-nowrap">
@@ -41,7 +41,7 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
                 <th key={p.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
                   <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap">
                     <span className="inline-flex translate-y-full pl-2">
-                      <Name who={names(p.id)} variant="code" />
+                      {side === 'dm' ? <span className="italic">{p.name}</span> : <Name who={names(p.id)} variant="code" />}
                     </span>
                   </span>
                 </th>
@@ -51,10 +51,10 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
           <tbody>
             {rows.map((person) => (
               <tr key={person.id} className="group h-6">
-                <th className="sticky left-0 z-10 w-px bg-paper px-2 py-0 text-left font-normal whitespace-nowrap group-hover:bg-canvas">
+                <th className={`sticky left-0 z-10 bg-paper px-2 py-0 text-left font-normal group-hover:bg-canvas ${side === 'team' ? 'w-64 min-w-64 max-w-64' : 'w-px whitespace-nowrap'}`}>
                   <Name
                     who={names(person.id)}
-                    variant={side === 'team' ? 'code' : 'short'}
+                    variant={side === 'team' ? 'full' : 'short'}
                   />
                 </th>
                 {columns.map((column) => {
