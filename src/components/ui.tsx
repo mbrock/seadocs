@@ -35,7 +35,8 @@ export function RequestMark(asked: Asked) {
 }
 
 /** A participant's name with its country tag ("ES Cornejo"), in the surname/title form or as a board code. */
-export function Name({ who, variant, className = '' }: { who: ParticipantName; variant: 'short' | 'code'; className?: string }) {
+export function Name({ who, variant, className = '' }: { who: ParticipantName; variant: 'short' | 'code' | 'full'; className?: string }) {
+  if (variant === 'full') return <span className={`block min-w-0 whitespace-normal [overflow-wrap:anywhere] ${sideStyle[who.side]} ${className}`}>{who.name}</span>
   return (
     <span className={`flex items-baseline whitespace-nowrap ${sideStyle[who.side]} ${className}`} title={who.name}>
       {who.tag && <span className="font-mono-matched mr-1 opacity-70">{who.tag}</span>}

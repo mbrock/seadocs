@@ -49,7 +49,7 @@ function Grid({ project, selected, onSelect }: { project: Project; selected: Cel
     <tr>
       <th aria-label={corner} className="sticky top-0 left-0 z-30 h-6 w-px bg-paper p-0" />
       {project.slots.map((slot) => (
-        <th key={slot.id} scope="col" className="sticky top-0 z-20 h-6 w-28 min-w-28 max-w-28 bg-paper px-1.5 py-0 text-center font-mono font-normal">
+        <th key={slot.id} scope="col" className="sticky top-0 z-20 h-6 w-44 min-w-44 max-w-44 bg-paper px-1.5 py-0 text-center font-mono font-normal">
           {slotLabel(project, slot.id)}
         </th>
       ))}
@@ -59,8 +59,8 @@ function Grid({ project, selected, onSelect }: { project: Project; selected: Cel
   const rows = (side: Side) =>
     participants(project, side).map((person, i) => (
       <tr key={person.id} className={`h-6 ${i % 2 === 0 ? 'bg-stripe' : ''}`}>
-        <th scope="row" className="sticky left-0 z-10 h-6 w-px bg-inherit px-1.5 py-0 text-left align-middle font-semibold leading-none whitespace-nowrap">
-          <Name who={names(person.id)} variant={side === 'team' ? 'code' : 'short'} />
+        <th scope="row" className="sticky left-0 z-10 w-48 min-w-48 max-w-48 bg-inherit px-1.5 py-1 text-left align-middle font-semibold leading-snug">
+          <Name who={names(person.id)} variant={side === 'team' ? 'full' : 'short'} />
         </th>
         {project.slots.map((slot) => {
           const meeting = meetingAt(index, side, slot.id, person.id)
@@ -68,14 +68,14 @@ function Grid({ project, selected, onSelect }: { project: Project; selected: Cel
           const active = selected?.slot === slot.id && selected.anchor === person.id
           const state = meeting ? names(meeting[otherSide(side)]).name : off ? 'not available' : 'free'
           return (
-            <td key={slot.id} className="h-6 w-28 min-w-28 max-w-28 p-0 align-middle">
+            <td key={slot.id} className="w-44 min-w-44 max-w-44 p-0 align-middle">
               <button
                 type="button"
                 aria-pressed={active}
                 aria-label={`${slotLabel(project, slot.id)}, ${person.name}: ${state}`}
                 title={meeting ? `${state} · ${askedBy(asksFor(project, meeting))}` : state}
                 onClick={() => onSelect({ slot: slot.id, side, anchor: person.id })}
-                className={`flex h-6 w-full cursor-pointer items-center gap-1 px-1.5 text-left hover:outline hover:outline-ink ${active ? 'outline-2 outline-accent' : ''} ${
+                className={`flex min-h-6 w-full cursor-pointer items-center gap-1 px-1.5 py-1 text-left leading-snug hover:outline hover:outline-ink ${active ? 'outline-2 outline-accent' : ''} ${
                   off && !meeting ? 'hatched' : ''
                 }`}
               >
@@ -114,12 +114,12 @@ function Grid({ project, selected, onSelect }: { project: Project; selected: Cel
   )
 }
 
-/** A cell's meeting: the request mark and the partner's code, muted when nobody asked, plus a red flag for a problem. */
+/** Full film titles, compact DM labels, request marks and problem flags. */
 function Booked({ who, asked, warning }: { who: ParticipantName; asked: Asked; warning: 'meets twice' | 'not available' | null }) {
   return (
     <>
       <RequestMark {...asked} />
-      <Name who={who} variant="code" className={asked.dm || asked.team ? '' : 'text-muted'} />
+      <Name who={who} variant={who.side === 'team' ? 'full' : 'code'} className={asked.dm || asked.team ? '' : 'text-muted'} />
       {warning && (
         <span aria-label={warning} className="ml-auto pl-1 font-bold text-warn">
           {warning === 'meets twice' ? '×2' : '!'}
