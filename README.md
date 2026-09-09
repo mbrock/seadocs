@@ -80,8 +80,9 @@ no saved browser state, the sample day is loaded automatically.
   board to preview their schedule, copy or download plain text, or download a
   formatted RTF document for Word / Google Docs. Exports use the current board,
   full names, the event title, and every slot in order, including free and
-  unavailable times. Decision-maker exports include both days with explicit day
-  headings; film-team exports include only the selected day. The toolbar CSV
+  unavailable times. All participant exports include only the selected day,
+  with the day in the heading and filename, so Day 1 can be shared before Day 2
+  is prepared. Switch festival days to export the other day. The toolbar CSV
   exports the selected day, while “Save both days” saves the whole festival.
 Every change is undoable (Ctrl/Cmd+Z, Shift for redo).
 

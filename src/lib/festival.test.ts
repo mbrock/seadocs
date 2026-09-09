@@ -80,16 +80,17 @@ test('rejects malformed festivals and dangling references rather than silently d
   }
 })
 
-test('DM export combines both days; team export only includes its own day', () => {
+test.each(DAY_INDICES)('participant exports include only the selected day (%s)', (day) => {
   const f = twoDays()
-  const dm = festivalSchedule(f, 1, 'dm', f.dms[0].id).join('\n')
-  expect(dm).toContain('Day 1 · Festival · 1')
-  expect(dm).toContain('Day 2 · Festival · 2')
-  expect(dm).toContain('Film 1')
-  expect(dm).toContain('Film 2')
-  const team = festivalSchedule(f, 1, 'team', f.days[1].teams[0].id).join('\n')
-  expect(team).toContain('Day 2')
-  expect(team).not.toContain('Day 1')
+  const other = day === 0 ? 2 : 1
+  const dm = festivalSchedule(f, day, 'dm', f.dms[0].id).join('\n')
+  expect(dm).toContain(`Day ${day + 1} · Festival · ${day + 1}`)
+  expect(dm).toContain(`Film ${day + 1}`)
+  expect(dm).not.toContain(`Film ${other}`)
+  expect(dm).not.toContain(`Day ${other}`)
+  const team = festivalSchedule(f, day, 'team', f.days[day].teams[0].id).join('\n')
+  expect(team).toContain(`Day ${day + 1}`)
+  expect(team).not.toContain(`Day ${other}`)
 })
 
 test('15-minute generator handles hour boundaries and rejects invalid ranges', () => {

@@ -1,14 +1,11 @@
 import { availabilityOfProject, participantName, slotLabel, type Project } from './project'
 import { indexMeetings, meetingAt, otherSide, type Id, type Side } from './scheduler'
-import { DAY_INDICES, festivalProject, type Festival, type DayIndex } from './festival'
+import { festivalProject, type Festival, type DayIndex } from './festival'
 
 export function festivalSchedule(festival: Festival, day: DayIndex, side: Side, id: Id): string[] {
-  const days = side === 'dm' ? DAY_INDICES : [day]
-  return [side === 'dm' ? 'Festival meetings · both days' : `Festival meetings · Day ${day + 1}`, participantName(festivalProject(festival, day), id),
-    ...days.flatMap((index) => {
-      const project = festivalProject(festival, index)
-      return ['', `Day ${index + 1}${project.title ? ` · ${project.title}` : ''}`, ...participantSchedule(project, side, id).slice(3)]
-    }),
+  const project = festivalProject(festival, day)
+  return [`Festival meetings · Day ${day + 1}`, participantName(project, id),
+    '', `Day ${day + 1}${project.title ? ` · ${project.title}` : ''}`, ...participantSchedule(project, side, id).slice(3),
   ]
 }
 

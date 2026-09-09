@@ -3,7 +3,7 @@ import { download } from '../lib/csv'
 import { availabilityOfProject, type Project } from '../lib/project'
 import { findIssues } from '../lib/scheduler'
 import { festivalSchedule, scheduleRtf } from '../lib/participantExport'
-import { DAY_INDICES, festivalProject, type Festival, type DayIndex } from '../lib/festival'
+import { type Festival, type DayIndex } from '../lib/festival'
 import { Button } from './ui'
 
 export function ParticipantExport({ project, festival, day }: { project: Project; festival: Festival; day: DayIndex }) {
@@ -13,15 +13,12 @@ export function ParticipantExport({ project, festival, day }: { project: Project
   const side = project.dms.some((p) => p.id === id) ? 'dm' : 'team'
   const lines = person ? festivalSchedule(festival, day, side, id) : []
   const text = lines.join('\n')
-  const issues = (side === 'dm' ? DAY_INDICES : [day]).reduce<number>((count, index) => {
-    const p = festivalProject(festival, index)
-    return count + findIssues(p.meetings, availabilityOfProject(p)).length
-  }, 0)
-  const filename = `schedule-${person?.name.replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0, 80) || 'participant'}`
+  const issues = findIssues(project.meetings, availabilityOfProject(project)).length
+  const filename = `schedule-day-${day + 1}-${person?.name.replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0, 80) || 'participant'}`
   return (
     <section className="mt-6 rounded border border-rule p-3">
-      <h2 className="font-bold">Share an individual schedule</h2>
-      <p className="mb-3 text-muted">Decision makers: both days in one schedule. Film teams: this day only. Free and unavailable times are included.</p>
+      <h2 className="font-bold">Share an individual schedule · Day {day + 1}</h2>
+      <p className="mb-3 text-muted">Exports include Day {day + 1} only, for decision makers and film teams. Switch festival days above to export the other day when it is ready. Free and unavailable times are included.</p>
       <label className="block">Decision maker or film team
         <select className="mt-1 max-w-full rounded border border-rule bg-paper p-2" value={person ? id : ''} onChange={(e) => { setId(e.target.value); setNote('') }}>
           <option value="">Choose a participant…</option>
