@@ -17,6 +17,9 @@ export default defineConfig({
     allowedHosts: ['.orb.swa.sh', '.onamp.dev'],
   },
   test: {
+    // Solver stages have real one-second budgets. Running WASM-heavy suites
+    // together on small CI runners starves them and makes results flaky.
+    fileParallelism: false,
     include: ['src/**/*.test.{ts,tsx}'],
   },
 })
