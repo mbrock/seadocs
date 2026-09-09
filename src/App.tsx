@@ -84,7 +84,10 @@ export default function App() {
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
           <SetupPanel project={project} onChange={updateProject} />
-          <BoardPanel key={day} project={project} onChange={updateProject} />
+          <BoardPanel key={day} project={project} onChange={updateProject}
+            canUndo={history.past.length > 0} canRedo={history.future.length > 0}
+            onUndo={() => { setSolveRequest(null); setHistory(undo) }}
+            onRedo={() => { setSolveRequest(null); setHistory(redo) }} />
         </div>
         <ParticipantExport key={`export-${day}`} project={project} festival={festival} day={day} />
       </main>

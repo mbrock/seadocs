@@ -65,16 +65,15 @@ no saved browser state, the sample day is loaded automatically.
   × slots. A green dot means the decision maker asked for the meeting, a blue
   dot means the team asked, and a hatched cell is a slot that person cannot do.
   Red is reserved for problems.
-  Click any cell to open it in the side panel: who is there (with *Remove*),
-  and every counterpart that could be booked, strongest request first, each
-  marked with what picking it would do — *free now*, *swap* (the two meetings
-  trade partners; the row shows who the other person gets and who asked for
-  that pair) or *moves from …* (the candidate leaves someone else's slot free).
-  A pair meets at most once a day, and nobody is booked when they are away:
-  counterparts that would break either rule are not listed, only counted
-  ("Not listed: 4 already meet Kawakami today"). The same panel is where you
-  record that someone **can't do a slot** — "Kawakami can't do 15:20" blocks
-  the cell (and removes any meeting there). Export is disabled while problems
+  Click any cell to open a visible editor drawer, with full names, search,
+  and Undo/Redo. Remove leaves a gap without rearranging other meetings.
+  Select a replacement to preview its effect, then confirm the booking or
+  swap. All counterparts appear, strongest request first; unavailable or
+  repeated pairs are disabled with a reason. Moving a meeting requires an
+  explicit confirmation and only offers times when both people are free.
+  The time selector browses this person's slots without moving any meetings.
+  The same editor records that someone **can't do a slot** — blocking
+  the cell also removes any meeting there. Export is disabled while problems
   remain. The solver runs entirely in a Web Worker in this browser and never
   uploads roster or interest data.
 - **Individual schedules** — select any decision maker or film team below the
