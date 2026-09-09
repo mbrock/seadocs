@@ -1,6 +1,6 @@
 import { availabilityOf, findIssues, pairKey, type PlacedMeeting, type ScheduleInput } from './scheduler'
 
-export const ADVANCED_POLICY_VERSION = 'local-cpsat-v1'
+export const ADVANCED_POLICY_VERSION = 'local-cpsat-v2-fairness'
 
 export interface AdvancedSolverInput extends ScheduleInput {
   /** The board on screen is a stability target, never an implicit lock. */
@@ -12,7 +12,7 @@ export interface AdvancedSolverInput extends ScheduleInput {
 export type AdvancedResultKind = 'optimal' | 'feasible' | 'infeasible' | 'failed'
 
 export interface SolverPhase {
-  name: 'mutual requests' | 'DM requests' | 'teams served' | 'team requests' | 'DM gaps' | 'total meetings' | 'stability'
+  name: 'mutual requests' | 'DM requests' | 'teams served' | 'team requests' | 'DM request fairness' | 'DM meeting fairness' | 'DM gaps' | 'total meetings' | 'stability'
   status: 'optimal' | 'feasible' | 'no incumbent'
   value?: number
   bound?: number

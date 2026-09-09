@@ -80,6 +80,8 @@ describe('integrated CP-SAT model', () => {
       'teams served',
       'team requests',
       'total meetings',
+      'DM request fairness',
+      'DM meeting fairness',
       'DM gaps',
       'stability',
     ])
@@ -87,7 +89,46 @@ describe('integrated CP-SAT model', () => {
     const starts = statuses.filter((status) => status.state === 'phase-started')
     expect(starts.map((status) => status.phase)).toEqual(result.phases.map((phase) => phase.name))
     expect(starts.every((status) => status.timeLimitSeconds === 1)).toBe(true)
-    expect(statuses.at(-1)).toMatchObject({ state: 'complete', resultKind: 'optimal', totalPhases: 7 })
+    expect(statuses.at(-1)).toMatchObject({ state: 'complete', resultKind: 'optimal', totalPhases: 9 })
+  })
+
+  test.each([false, true])('spreads scarce requested meetings regardless of roster direction (reversed=%s)', async (reversed) => {
+    const dms = [participant('d1'), participant('d2'), participant('d3'), participant('d4')]
+    const input = {
+      teams: [participant('t1'), participant('t2')], dms: reversed ? dms.toReversed() : dms, slots: numberedSlots(2),
+      dmAsks: Object.fromEntries(dms.flatMap((d) => ['t1', 't2'].map((t) => [`${t}|${d.id}`, true as const]))), teamAsks: {},
+      currentBoard: [
+        { team: 't1', dm: 'd1', slot: 's1' }, { team: 't2', dm: 'd1', slot: 's2' },
+        { team: 't2', dm: 'd2', slot: 's1' }, { team: 't1', dm: 'd2', slot: 's2' },
+      ], fallbackHint: [],
+    }
+    const result = await solveWithCpSat(api, input)
+    expect(validateAdvancedBoard(input, result.meetings ?? [])).toEqual([])
+    expect(result.meetings).toHaveLength(4)
+    expect(dms.map((d) => result.meetings!.filter((m) => m.dm === d.id).length)).toEqual([1, 1, 1, 1])
+    expect(result.phases.find((p) => p.name === 'DM request fairness')).toMatchObject({ status: 'optimal', value: 4 })
+  })
+
+  test('balances introductions even for DMs without requests, respecting availability', async () => {
+    const input = {
+      teams: [participant('t1'), participant('t2')],
+      dms: [participant('d1'), participant('d2'), participant('d3'), participant('away', ['s1', 's2', 's3'])],
+      slots: numberedSlots(3), dmAsks: {}, teamAsks: {},
+    }
+    const result = await solve(input)
+    expect(validateAdvancedBoard(input, result.meetings ?? [])).toEqual([])
+    expect(input.dms.map((d) => result.meetings!.filter((m) => m.dm === d.id).length)).toEqual([2, 2, 2, 0])
+  })
+
+  test('fairness never sacrifices mutual requests to equalize counts', async () => {
+    const input = {
+      teams: [participant('t1'), participant('t2')], dms: [participant('d1'), participant('d2'), participant('d3')],
+      slots: numberedSlots(2), dmAsks: { 't1|d1': true, 't2|d1': true } as const,
+      teamAsks: { 't1|d1': true, 't2|d1': true } as const,
+    }
+    const result = await solve(input)
+    expect(advancedMetrics({ ...input, currentBoard: [], fallbackHint: [] }, result.meetings!)).toMatchObject({ mutual: 2, dmRequested: 2, total: 4 })
+    expect(input.dms.map((d) => result.meetings!.filter((m) => m.dm === d.id).length)).toEqual([2, 1, 1])
   })
 
   test('solves the deterministic 13×17 sample at normal event scale', async () => {
@@ -97,6 +138,6 @@ describe('integrated CP-SAT model', () => {
     console.log(`CP-SAT 13×17×9: ${result.kind}, ${result.meetings?.length ?? 0} meetings, ${result.runtimeMs.toFixed(0)}ms`)
     expect(result.kind === 'optimal' || result.kind === 'feasible').toBe(true)
     expect(validateAdvancedBoard(project, result.meetings ?? [])).toEqual([])
-    expect(result.runtimeMs).toBeLessThan(10_000)
+    expect(result.runtimeMs).toBeLessThan(12_000)
   }, 15_000)
 })

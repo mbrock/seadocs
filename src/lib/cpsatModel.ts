@@ -4,11 +4,12 @@ import { availabilityOf, pairKey, type PlacedMeeting } from './scheduler'
 
 type Api = typeof import('cpsat-js/portable')
 type Direction = 'max' | 'min'
+const TOTAL_PHASES = 9
 
 interface ModelState {
   model: CpModel
   x: Map<string, BoolVar>
-  metrics: Record<'mutual' | 'dmRequested' | 'teamsServed' | 'teamRequested' | 'total' | 'stable' | 'dmGaps', LinearExpr | IntVar>
+  metrics: Record<'mutual' | 'dmRequested' | 'teamsServed' | 'teamRequested' | 'total' | 'stable' | 'dmGaps' | 'requestImbalance' | 'meetingImbalance', LinearExpr | IntVar>
 }
 
 const solutionStatus = (api: Api, result: CpSolverResult) =>
@@ -78,8 +79,26 @@ function buildModel(api: Api, input: AdvancedSolverInput, phaseB: boolean, floor
   const teamsServed = sum(api, servedVars)
   const stable = sum(api, input.currentBoard.map((m) => x.get(at(m.team, m.dm, m.slot))).filter((v): v is BoolVar => !!v))
   let dmGaps: LinearExpr | IntVar = api.LinearExpr.fromConstant(0)
+  let requestImbalance = api.LinearExpr.fromConstant(0)
+  let meetingImbalance = api.LinearExpr.fromConstant(0)
 
   if (phaseB) {
+    // With totals protected, minimizing squared counts favors spreading meetings:
+    // 1+1 costs 2, whereas 2+0 costs 4. Unary thresholds encode the square
+    // exactly (1+3+...+(2n-1) = n²), including in later constrained stages.
+    const squaredCount = (vars: BoolVar[], name: string): LinearExpr => {
+      const thresholds = Array.from({ length: Math.min(vars.length, input.slots.length) }, (_, i) => model.newBoolVar(`${name}_${i}`))
+      model.add(sum(api, vars).equals(sum(api, thresholds)))
+      for (let i = 1; i < thresholds.length; i++) model.add(thresholds[i].le(thresholds[i - 1]))
+      return sum(api, thresholds.map((v, i) => v.times(2 * i + 1)))
+    }
+    for (const dm of input.dms) {
+      const meetings = input.teams.map((team) => y.get(pairKey(team.id, dm.id))).filter((v): v is BoolVar => !!v)
+      const requests = input.teams.filter((team) => pairKey(team.id, dm.id) in input.dmAsks)
+        .map((team) => y.get(pairKey(team.id, dm.id))).filter((v): v is BoolVar => !!v)
+      requestImbalance = requestImbalance.plus(squaredCount(requests, `request_count_${dm.id}`))
+      meetingImbalance = meetingImbalance.plus(squaredCount(meetings, `meeting_count_${dm.id}`))
+    }
     const gaps: BoolVar[] = []
     for (const dm of input.dms) {
       const occupied: (BoolVar | null)[] = input.slots.map((slot) => {
@@ -116,7 +135,7 @@ function buildModel(api: Api, input: AdvancedSolverInput, phaseB: boolean, floor
     dmGaps = sum(api, gaps)
   }
 
-  const metrics = { mutual, dmRequested, teamsServed, teamRequested, total, stable, dmGaps }
+  const metrics = { mutual, dmRequested, teamsServed, teamRequested, total, stable, dmGaps, requestImbalance, meetingImbalance }
   for (const [name, floor] of Object.entries(floors) as [keyof typeof metrics, { direction: Direction; value: number }][]) {
     model.add(floor.direction === 'max' ? metrics[name].ge(floor.value) : metrics[name].le(floor.value))
   }
@@ -143,7 +162,7 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
 
   const run = (state: ModelState, name: SolverPhase['name'], metric: keyof ModelState['metrics'], direction: Direction, phaseIndex: number, seconds?: number) => {
     const progress = (status: Omit<SolverStatusInfo, 'elapsedMs'>) => onStatus({ ...status, elapsedMs: Math.round(performance.now() - started) })
-    progress({ state: 'phase-started', phase: name, phaseIndex, totalPhases: 7, direction: direction === 'max' ? 'maximize' : 'minimize', ...(seconds === undefined ? {} : { timeLimitSeconds: seconds }) })
+    progress({ state: 'phase-started', phase: name, phaseIndex, totalPhases: TOTAL_PHASES, direction: direction === 'max' ? 'maximize' : 'minimize', ...(seconds === undefined ? {} : { timeLimitSeconds: seconds }) })
     if (direction === 'max') state.model.maximize(state.metrics[metric])
     else state.model.minimize(state.metrics[metric])
     const result = solver.solve(state.model, {
@@ -153,7 +172,7 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
         state: 'incumbent',
         phase: name,
         phaseIndex,
-        totalPhases: 7,
+        totalPhases: TOTAL_PHASES,
         objectiveValue: Math.round(solution.objectiveValue),
         bestObjectiveBound: Math.round(solution.bestObjectiveBound),
         solverWallTime: solution.wallTime,
@@ -176,10 +195,10 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
     } else allOptimal = false
     if (status !== 'optimal') allOptimal = false
     phases.push(phase)
-    progress({ state: 'phase-complete', phase: name, phaseIndex, totalPhases: 7, result: phase })
+    progress({ state: 'phase-complete', phase: name, phaseIndex, totalPhases: TOTAL_PHASES, result: phase })
   }
 
-  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 0, totalPhases: 7 })
+  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 0, totalPhases: TOTAL_PHASES })
   const a = buildModel(api, input, false, floors, incumbent)
   run(a, 'mutual requests', 'mutual', 'max', 1, 1)
   run(a, 'DM requests', 'dmRequested', 'max', 2, 1)
@@ -187,22 +206,24 @@ export async function solveWithCpSat(api: Api, input: AdvancedSolverInput, onSta
   run(a, 'team requests', 'teamRequested', 'max', 4, 1)
   run(a, 'total meetings', 'total', 'max', 5, 1)
 
-  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 5, totalPhases: 7 })
+  onStatus({ state: 'building', elapsedMs: Math.round(performance.now() - started), phaseIndex: 5, totalPhases: TOTAL_PHASES })
   const b = buildModel(api, input, true, floors, incumbent)
-  run(b, 'DM gaps', 'dmGaps', 'min', 6, 1)
-  run(b, 'stability', 'stable', 'max', 7, 1)
+  run(b, 'DM request fairness', 'requestImbalance', 'min', 6, 1)
+  run(b, 'DM meeting fairness', 'meetingImbalance', 'min', 7, 1)
+  run(b, 'DM gaps', 'dmGaps', 'min', 8, 1)
+  run(b, 'stability', 'stable', 'max', 9, 1)
 
   const runtimeMs = performance.now() - started
   if (!hasSolverIncumbent && !incumbent.length && input.teams.length && input.dms.length && Object.keys(input.dmAsks).length + Object.keys(input.teamAsks).length > 0) {
     const result: AdvancedSolverResult = { kind: 'failed', phases, runtimeMs, message: 'No valid CP-SAT incumbent was found before the time limit.', solver: solverInfo() }
-    onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: 7, resultKind: result.kind, message: result.message })
+    onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: TOTAL_PHASES, resultKind: result.kind, message: result.message })
     return result
   }
   // Recompute metrics independently as a final read of the board; this also
   // makes accidental protocol/model drift visible in tests and diagnostics.
   advancedMetrics(input, incumbent)
   const result: AdvancedSolverResult = { kind: allOptimal ? 'optimal' : 'feasible', meetings: incumbent, phases, runtimeMs, solver: solverInfo() }
-  onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: 7, resultKind: result.kind })
+  onStatus({ state: 'complete', elapsedMs: Math.round(runtimeMs), totalPhases: TOTAL_PHASES, resultKind: result.kind })
   return result
 }
 

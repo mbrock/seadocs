@@ -56,7 +56,7 @@ no saved browser state, the sample day is loaded automatically.
   possible, and lets a team ask for a meeting the decision maker didn't request
   (placed if there's room).
 - **Board** — “Build schedule” explicitly starts the local CP-SAT solver,
-  giving each of its seven objective stages up to one second. Rebuilding an
+  giving each of its nine objective stages up to one second. Rebuilding an
   existing board asks for confirmation: meetings may move and removed meetings
   may return. The whole build is undoable. Any project edit or Undo cancels an
   in-flight build; Cancel build leaves the existing board intact. No automatic
@@ -118,8 +118,14 @@ Optimization uses clear sequential objectives rather than a hidden weighted
 score. Phase A maximizes mutual requests, then DM requests, teams receiving at
 least one meeting, team requests, and total meetings. Each proven optimum or
 time-limited incumbent value becomes the next stage's constraint. Phase B
-rebuilds the full selectable pair × slot model with DM internal-gap variables,
-then minimizes DM gaps and finally favors unchanged current-board cells. It
+rebuilds the full selectable pair × slot model, then balances fulfilled DM
+requests, balances total meetings per DM, minimizes DM gaps, and finally
+favors unchanged current-board cells. Each fairness stage minimizes the sum
+of squared per-DM counts: spreading two meetings as 1 + 1 is preferred over
+2 + 0. This balances counts, not percentages of requests fulfilled. Earlier
+request and meeting totals remain protected; availability is always hard.
+Fairness is best-effort within the time limit, not a promise of equal schedules
+or a requested meeting for everyone. It
 does not freeze Phase A pair choices. There is no cap on meetings a decision
 maker did not ask for: everyone is at the event to meet, so a request is a
 priority, not a permission. The request stages run first and are locked in as
@@ -136,8 +142,8 @@ ordinary editing. Current project files do not distinguish locks/pins from
 editable board cells, so on rebuild manual cells are stability preferences,
 not hidden hard locks. If lock/pin
 fields are added later they must become explicit hard constraints and validator
-checks. The current fairness compromise is similarly intentional: v1 maximizes
-the number of teams served rather than using the old “DMs under half” threshold.
+checks. Team coverage remains a higher priority than DM balancing; the fairness
+stages do not reduce the number of teams served to equalize DM schedules.
 The previous JavaScript scheduler remains only as a starting hint and emergency
 fallback if WebAssembly fails; it is not a visible alternative or a correctness
 oracle for the integrated model.
