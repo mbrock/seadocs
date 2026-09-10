@@ -22,3 +22,14 @@ test('an empty schedule is explicitly labelled', () => {
   const html = renderToStaticMarkup(<PrintSchedule project={emptyProject()} day={0} />)
   expect(html).toContain('No meetings scheduled.')
 })
+
+test('compact layout splits wide schedules into labelled blocks and repeats participants', () => {
+  const p = withSlots(withParticipants(emptyProject(), ['Film'], ['Buyer']), Array.from({ length: 25 }, (_, i) => `Time ${i + 1}`))
+  const html = renderToStaticMarkup(<PrintSchedule project={p} day={1} compact />)
+  expect(html.match(/<table>/g)).toHaveLength(3)
+  expect(html.match(/>Buyer</g)).toHaveLength(3)
+  for (const n of [1, 12, 13, 24, 25]) expect(html).toContain(`>Time ${n}<`)
+  expect(html).toContain('Time block 3/3')
+  expect(html).toContain('print-compact')
+  expect(html).not.toContain('Day 1')
+})

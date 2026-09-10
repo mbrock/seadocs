@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { withMeetings, type Project } from './lib/project'
 import type { PlacedMeeting } from './lib/scheduler'
 import { loadFestival, saveFestival } from './lib/festivalPersist'
@@ -17,6 +18,11 @@ import { PrintSchedule } from './components/PrintSchedule'
 export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadFestival() ?? festivalFromProject(sampleProject())))
   const [day, setDay] = useState<DayIndex>(0)
+  const [compactPrint, setCompactPrint] = useState(false)
+  const print = (compact: boolean) => {
+    flushSync(() => setCompactPrint(compact))
+    window.print()
+  }
   const festival = history.present
   const project = useMemo(() => festivalProject(festival, day), [festival, day])
   const [solveRequest, setSolveRequest] = useState<{ festival: Festival; day: DayIndex; project: Project } | null>(null)
@@ -85,7 +91,8 @@ export default function App() {
             if (!confirm(`Clear all meetings for Day ${day + 1}? Participants, requests, time slots and availability stay unchanged. The other day is untouched. You can Undo afterwards.`)) return
             updateProject((p) => withMeetings(p, []))
           }}>Clear schedule</Button>
-          <Button disabled={!project.dms.length || !!solverStatus} onClick={() => window.print()}>Print / Save PDF · Day {day + 1}</Button>
+          <Button disabled={!project.dms.length || !!solverStatus} onClick={() => print(false)}>Running order PDF · Day {day + 1}</Button>
+          <Button disabled={!project.dms.length || !!solverStatus} onClick={() => print(true)}>Compact table PDF · Day {day + 1}</Button>
           <p className="text-muted">Edit requests, then build. Manual changes stay put; only rebuilding rearranges the whole board. Undo restores any change.</p>
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
@@ -97,7 +104,7 @@ export default function App() {
         </div>
         <ParticipantExport key={`export-${day}`} project={project} festival={festival} day={day} />
       </main>
-      <PrintSchedule project={project} day={day} />
+      <PrintSchedule project={project} day={day} compact={compactPrint} />
     </div>
   )
 }
