@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest'
 import {
+  delayTimes,
   emptyProject,
   parseNames,
   reconcileParticipants,
@@ -18,6 +19,33 @@ import { deserialize, serialize } from './persist'
 import { demoProject } from './fixtures'
 import { pairKey } from './scheduler'
 import { commit, initialHistory, undo } from './history'
+import { boardCsv } from './csv'
+import { participantSchedule, scheduleRtf } from './participantExport'
+
+test('delays accumulate without changing identities, requests, availability or meetings; exports and saved files follow', () => {
+  const p = withSlots(demoProject(), ['15:50–16:05', '16:20', '16:40 - 16:55'])
+  const shifted = delayTimes(delayTimes(p, 15), 5)
+  expect(shifted.slots.map((s) => s.label)).toEqual(['16:10–16:25', '16:40', '17:00–17:15'])
+  expect(shifted.slots.map((s) => s.id)).toEqual(p.slots.map((s) => s.id))
+  expect({ ...shifted, slots: p.slots }).toEqual(p)
+  expect(shifted.meetings).toBe(p.meetings)
+  expect(boardCsv(shifted)).toContain('16:10–16:25')
+  const lines = participantSchedule(shifted, 'dm', p.dms[0].id)
+  expect(lines.join('\n')).toContain('16:10–16:25')
+  expect(scheduleRtf(lines)).toContain('16:10')
+  expect(deserialize(serialize(shifted)).slots).toEqual(shifted.slots)
+  expect(undo(commit(initialHistory(p), shifted)).present).toBe(p)
+})
+
+test('delay validates all slots atomically and does not wrap into another day', () => {
+  for (const label of ['Slot 2', '25:00', '15:99', '16:00–15:00', '23:50–24:00']) {
+    const p = withSlots(emptyProject(), ['10:00', label])
+    expect(() => delayTimes(p, 15)).toThrow()
+    expect(p.slots[0].label).toBe('10:00')
+  }
+  expect(delayTimes(withSlots(emptyProject(), ['23:30–23:45']), 15).slots[0].label).toBe('23:45–24:00')
+  for (const minutes of [0, -5, 1.5, NaN]) expect(() => delayTimes(emptyProject(), minutes)).toThrow()
+})
 
 test('parseNames trims, drops blanks and duplicates', () => {
   expect(parseNames(' A \n\nB\nA\n  ')).toEqual(['A', 'B'])

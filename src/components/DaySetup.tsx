@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MAX_SLOTS, parseLines, rosterText, slotLabel, type Project } from '../lib/project'
+import { delayTimes, MAX_SLOTS, parseLines, rosterText, slotLabel, type Project } from '../lib/project'
 import { withDaySetup } from '../lib/setup'
 import { quarterHourSlots, type DayIndex } from '../lib/festival'
 import { Button, type UpdateProject } from './ui'
@@ -16,9 +16,29 @@ export function DaySetup({ project, onChange, day }: { project: Project; onChang
         {!editing && <Button onClick={() => setEditing(true)}>Edit setup</Button>}
       </div>
       <p className="mt-2 text-muted">Decision-maker names are shared across both days; removing a decision maker removes their meetings on both days. Film teams, requests, availability and meetings otherwise belong to this day only.</p>
+      {!editing && <DelayControls project={project} onChange={onChange} day={day} />}
       {editing && <SetupEditor key={JSON.stringify([project.title, project.teams, project.dms, project.slots])} project={project} onChange={onChange} onClose={() => setEditing(false)} />}
     </section>
   )
+}
+
+function DelayControls({ project, onChange, day }: { project: Project; onChange: UpdateProject; day: DayIndex }) {
+  const [error, setError] = useState('')
+  return <div className="mt-3 border-t border-rule pt-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-semibold">Running late? Delay Day {day + 1}</span>
+      {[5, 15, 20].map((minutes) => <Button key={minutes} onClick={() => {
+        try {
+          const shifted = delayTimes(project, minutes)
+          onChange(() => shifted)
+          setError('')
+        } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+      }}>+{minutes} min</Button>)}
+    </div>
+    <p role="status" className="mt-2">First slot: {slotLabel(project, project.slots[0]?.id ?? '')}</p>
+    <p className="mt-1 text-muted">Shifts every time slot on this day, including exports. Meetings stay exactly where they are. Click again to add more time; Undo reverses a delay.</p>
+    {error && <p role="alert" className="mt-1 text-warn">{error}</p>}
+  </div>
 }
 
 function SetupEditor({ project, onChange, onClose }: { project: Project; onChange: UpdateProject; onClose: () => void }) {

@@ -175,6 +175,22 @@ export function slotLabel(project: Project, slotId: Id): string {
   return project.slots[i]?.label || `Slot ${i + 1}`
 }
 
+/** Shift clock labels only: slot identity, meetings and availability stay intact. */
+export function delayTimes(project: Project, minutes: number): Project {
+  if (!Number.isInteger(minutes) || minutes <= 0) throw new Error('Choose a positive whole number of minutes.')
+  const slots = project.slots.map((slot) => {
+    const match = /^(\d{1,2}):([0-5]\d)(\s*[-–—]\s*(\d{1,2}):([0-5]\d))?$/.exec(slot.label.trim())
+    if (!match) throw new Error('Use clock times such as 15:00 or 15:00–15:15 for every slot in Edit setup before delaying.')
+    const start = Number(match[1]) * 60 + Number(match[2])
+    const end = match[3] ? Number(match[4]) * 60 + Number(match[5]) : null
+    if (start >= 1440 || (end !== null && (end <= start || end > 1440))) throw new Error('Check the time slots in Edit setup: times must be within one day, with each end after its start.')
+    if (start + minutes >= 1440 || (end !== null && end + minutes > 1440)) throw new Error('This delay would move meetings past midnight. No times were changed.')
+    const clock = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`
+    return { ...slot, label: clock(start + minutes) + (end === null ? '' : `–${clock(end + minutes)}`) }
+  })
+  return { ...project, slots }
+}
+
 export function participantName(project: Project, id: Id): string {
   const p = project.teams.find((t) => t.id === id) ?? project.dms.find((d) => d.id === id)
   return p ? p.name : id
