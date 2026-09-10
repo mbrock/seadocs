@@ -120,7 +120,16 @@
   .print-title h2 { font-size: 15pt; margin: 2mm 0; }
   .print-title p, .print-note { font-size: 9pt; font-weight: 400; margin-top: 2mm; }
   .print-compact { page: compact-schedule; font-size: 7pt; line-height: 1.15; }
-  .print-compact th, .print-compact td { padding: 0.7mm; border: 0.2mm solid #bbb; }
+  .print-compact th, .print-compact td { padding: 0.8mm; border: 0; vertical-align: middle; }
+  .print-compact tbody tr:nth-child(odd) { background: #f4f3f0; }
+  .print-compact tbody th { font-weight: 700; }
+  .print-compact tbody th > span { white-space: normal; }
+  .print-compact thead tr:last-child th:not(:first-child) { font-family: var(--font-mono); text-align: center; font-weight: 400; }
+  .print-compact { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .print-booked { display: flex; align-items: center; gap: 0.8mm; }
+  .print-booked > div { min-width: 0; }
+  .print-booked > span, .print-legend > span { width: 2mm; height: 2mm; }
+  .print-legend { font-size: 7pt; font-weight: 400; margin-top: 1mm; }
   .print-compact .print-title { padding-bottom: 2mm; }
   .print-compact h1 { font-size: 12pt; }
   .print-compact .print-title p { font-size: 7pt; }

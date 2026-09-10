@@ -23,6 +23,19 @@ test('an empty schedule is explicitly labelled', () => {
   expect(html).toContain('No meetings scheduled.')
 })
 
+test('compact print reuses board name styling, request marks and unavailable cells', () => {
+  let p = withParticipants(emptyProject(), ['The Full Film Title'], ['Buyer One', 'Buyer Two'])
+  p = withMeetings(p, [{ dm: p.dms[0].id, team: p.teams[0].id, slot: p.slots[0].id }])
+  p = withAvailability(p, p.dms[1].id, p.slots[0].id, false)
+  const html = renderToStaticMarkup(<PrintSchedule project={p} day={0} compact />)
+  expect(html).toContain('italic')
+  expect(html).toContain('The Full Film Title')
+  expect(html).toContain('print-booked text-muted')
+  expect(html).toContain('bg-request-both')
+  expect(html).toContain('hatched')
+  expect(html).toContain('Blank = free')
+})
+
 test('compact layout splits wide schedules into labelled blocks and repeats participants', () => {
   const p = withSlots(withParticipants(emptyProject(), ['Film'], ['Buyer']), Array.from({ length: 25 }, (_, i) => `Time ${i + 1}`))
   const html = renderToStaticMarkup(<PrintSchedule project={p} day={1} compact />)
