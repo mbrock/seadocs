@@ -80,6 +80,10 @@ export default function App() {
             setSolveRequest({ festival, day, project })
           }}>{project.meetings.length ? 'Rebuild schedule' : 'Build schedule'}</Button>
           {solverStatus && <Button onClick={() => setSolveRequest(null)}>Cancel build</Button>}
+          <Button disabled={!project.meetings.length} onClick={() => {
+            if (!confirm(`Clear all meetings for Day ${day + 1}? Participants, requests, time slots and availability stay unchanged. The other day is untouched. You can Undo afterwards.`)) return
+            updateProject((p) => withMeetings(p, []))
+          }}>Clear schedule</Button>
           <p className="text-muted">Edit requests, then build. Manual changes stay put; only rebuilding rearranges the whole board. Undo restores any change.</p>
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
