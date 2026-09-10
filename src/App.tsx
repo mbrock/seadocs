@@ -12,6 +12,7 @@ import { useScheduleSolve } from './components/useScheduleSolve'
 import { Button, type UpdateProject } from './components/ui'
 import { DaySetup } from './components/DaySetup'
 import { ParticipantExport } from './components/ParticipantExport'
+import { PrintSchedule } from './components/PrintSchedule'
 
 export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadFestival() ?? festivalFromProject(sampleProject())))
@@ -68,7 +69,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="wrap flex-1 pt-3 pb-12 print:p-0">
+      <main className="wrap flex-1 pt-3 pb-12 print:hidden">
         <nav aria-label="Festival day" className="mb-3 flex items-center gap-2">
           {DAY_INDICES.map((index) => <Button key={index} aria-pressed={day === index} onClick={() => { setSolveRequest(null); setDay(index) }}>Day {index + 1}{day === index ? ' · selected' : ''}</Button>)}
           <span className="text-muted">One festival file · shared decision makers · separate schedules</span>
@@ -84,6 +85,7 @@ export default function App() {
             if (!confirm(`Clear all meetings for Day ${day + 1}? Participants, requests, time slots and availability stay unchanged. The other day is untouched. You can Undo afterwards.`)) return
             updateProject((p) => withMeetings(p, []))
           }}>Clear schedule</Button>
+          <Button disabled={!project.dms.length || !!solverStatus} onClick={() => window.print()}>Print / Save PDF · Day {day + 1}</Button>
           <p className="text-muted">Edit requests, then build. Manual changes stay put; only rebuilding rearranges the whole board. Undo restores any change.</p>
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
@@ -95,6 +97,7 @@ export default function App() {
         </div>
         <ParticipantExport key={`export-${day}`} project={project} festival={festival} day={day} />
       </main>
+      <PrintSchedule project={project} day={day} />
     </div>
   )
 }
