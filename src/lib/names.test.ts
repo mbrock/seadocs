@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { countryCode, displayNames, parseName, titleWord, titleWords } from './names'
+import { countryCode, displayNames, parseName, printTitleWords, titleWord, titleWords } from './names'
+
+it('print words use the longest exclusive word across every title, case-insensitively', () => {
+  expect(printTitleWords(['The Northern Shore', 'Northern Lights', 'Light light'])).toEqual(['Shore', 'Lights', 'Light'])
+  expect(printTitleWords(['My Shadows Grow Faster Than Me', 'Meet Me at the Graveyard'])).toEqual(['Shadows', 'Graveyard'])
+  expect(printTitleWords(['Été à Paris', 'ÉTÉ à Lyon'])).toEqual(['Paris', 'Lyon'])
+})
+
+it('print words fall back safely when no exclusive word exists', () => {
+  expect(printTitleWords(['Red Blue', 'Blue Red'])).toEqual(['Red Blue', 'Blue Red'])
+  const labels = printTitleWords(['Film', 'film', 'Film (2)'])
+  expect(new Set(labels.map((label) => label.toLowerCase())).size).toBe(3)
+  expect(printTitleWords(['The', '!!!'])).toEqual(['The', '!!!'])
+})
 
 describe('parseName', () => {
   it('splits person, organisation and country', () => {

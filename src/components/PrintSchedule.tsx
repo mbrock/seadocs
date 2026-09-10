@@ -3,10 +3,13 @@ import { asksFor, availabilityOfProject, slotLabel, type Project } from '../lib/
 import { findIssues, indexMeetings, meetingAt } from '../lib/scheduler'
 import { Name, RequestMark } from './ui'
 import { useNames } from './useNames'
+import { printTitleWords } from '../lib/names'
 
 /** A paginated running order, rather than a squeezed screenshot of the editor. */
-export function PrintSchedule({ project, day, compact = false }: { project: Project; day: DayIndex; compact?: boolean }) {
+export function PrintSchedule({ project, day, compact = false, abbreviateFilms = false }: { project: Project; day: DayIndex; compact?: boolean; abbreviateFilms?: boolean }) {
   const names = useNames(project)
+  const labels = printTitleWords(project.teams.map((team) => team.name))
+  const filmNames = new Map(project.teams.map((team, i) => [team.id, abbreviateFilms ? labels[i] : team.name]))
   const index = indexMeetings(project.meetings)
   const available = availabilityOfProject(project)
   const teams = new Map(project.teams.map((team) => [team.id, team]))
@@ -35,7 +38,7 @@ export function PrintSchedule({ project, day, compact = false }: { project: Proj
               const off = !available(dm.id, slot.id)
               const asked = meeting && asksFor(project, meeting)
               return <td key={slot.id} className={off ? 'hatched' : ''}>{team && asked ? <div className={`print-booked ${asked.dm || asked.team ? '' : 'text-muted'}`}>
-                <RequestMark {...asked} /><div><Name who={names(team.id)} variant="full" />{team.online ? ' (online)' : ''}</div>
+                <RequestMark {...asked} /><div><Name who={{ ...names(team.id), name: filmNames.get(team.id)! }} variant="full" />{team.online ? ' (online)' : ''}</div>
               </div> : off ? '×' : null}</td>
             })}
           </tr>)}</tbody>
@@ -62,7 +65,7 @@ export function PrintSchedule({ project, day, compact = false }: { project: Proj
           const team = meeting && teams.get(meeting.team)
           return <tr key={dm.id}>
             <th scope="row">{dm.name}{dm.online ? ' (online)' : ''}</th>
-            <td>{team ? <>{team.name}{team.online ? ' (online)' : ''}</> : available(dm.id, slot.id) ? '— Free' : '— Unavailable'}</td>
+            <td>{team ? <>{filmNames.get(team.id)}{team.online ? ' (online)' : ''}</> : available(dm.id, slot.id) ? '— Free' : '— Unavailable'}</td>
           </tr>
         })}</tbody>
       </table>

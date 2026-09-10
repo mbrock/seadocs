@@ -182,6 +182,24 @@ export interface DisplayName {
   affiliation: string
 }
 
+/** Print-only identifiers: longest meaningful word exclusive to this title. */
+export function printTitleWords(titles: string[]): string[] {
+  const words = titles.map((title) => title.normalize('NFC').match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) ?? [])
+  const key = (word: string) => word.toLowerCase().replace(/’/g, "'")
+  const owners = new Map<string, number>()
+  for (const list of words) for (const word of new Set(list.map(key))) owners.set(word, (owners.get(word) ?? 0) + 1)
+  const labels = words.map((list, i) => list.filter((word) => owners.get(key(word)) === 1 && !TITLE_STOPWORDS.has(key(word)))
+    .sort((a, b) => [...b].length - [...a].length)[0] || titles[i])
+  const used = new Set<string>()
+  return labels.map((label, i) => {
+    let unique = label
+    let suffix = 2
+    while (used.has(key(unique)) || labels.some((other, j) => j !== i && key(other) === key(unique))) unique = `${label} (${suffix++})`
+    used.add(key(unique))
+    return unique
+  })
+}
+
 /**
  * Short forms for a whole roster: surnames for people with affiliations and
  * concise, unique title words for teams.

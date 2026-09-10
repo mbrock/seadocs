@@ -19,6 +19,7 @@ export default function App() {
   const [history, setHistory] = useState(() => initialHistory(loadFestival() ?? festivalFromProject(sampleProject())))
   const [day, setDay] = useState<DayIndex>(0)
   const [compactPrint, setCompactPrint] = useState(false)
+  const [abbreviateFilms, setAbbreviateFilms] = useState(false)
   const print = (compact: boolean) => {
     flushSync(() => setCompactPrint(compact))
     window.print()
@@ -93,6 +94,7 @@ export default function App() {
           }}>Clear schedule</Button>
           <Button disabled={!project.dms.length || !!solverStatus} onClick={() => print(false)}>Running order PDF · Day {day + 1}</Button>
           <Button disabled={!project.dms.length || !!solverStatus} onClick={() => print(true)}>Compact table PDF · Day {day + 1}</Button>
+          <label className="inline-flex items-center gap-2"><input type="checkbox" checked={abbreviateFilms} onChange={(e) => setAbbreviateFilms(e.target.checked)} />Use abbreviated film names</label>
           <p className="text-muted">Edit requests, then build. Manual changes stay put; only rebuilding rearranges the whole board. Undo restores any change.</p>
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
@@ -104,7 +106,7 @@ export default function App() {
         </div>
         <ParticipantExport key={`export-${day}`} project={project} festival={festival} day={day} />
       </main>
-      <PrintSchedule project={project} day={day} compact={compactPrint} />
+      <PrintSchedule project={project} day={day} compact={compactPrint} abbreviateFilms={abbreviateFilms} />
     </div>
   )
 }

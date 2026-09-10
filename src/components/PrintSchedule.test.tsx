@@ -23,6 +23,16 @@ test('an empty schedule is explicitly labelled', () => {
   expect(html).toContain('No meetings scheduled.')
 })
 
+test.each([false, true])('film abbreviation is opt-in for print (compact=%s)', (compact) => {
+  let p = withParticipants(emptyProject(), ['The Northern Shore', 'Northern Lights'], ['Buyer'])
+  p = withMeetings(p, [{ dm: p.dms[0].id, team: p.teams[0].id, slot: p.slots[0].id }])
+  expect(renderToStaticMarkup(<PrintSchedule project={p} day={0} compact={compact} />)).toContain('The Northern Shore')
+  const html = renderToStaticMarkup(<PrintSchedule project={p} day={0} compact={compact} abbreviateFilms />)
+  expect(html).toContain('Shore')
+  expect(html).not.toContain('The Northern Shore')
+  expect(p.teams[0].name).toBe('The Northern Shore')
+})
+
 test('compact print reuses board name styling, request marks and unavailable cells', () => {
   let p = withParticipants(emptyProject(), ['The Full Film Title'], ['Buyer One', 'Buyer Two'])
   p = withMeetings(p, [{ dm: p.dms[0].id, team: p.teams[0].id, slot: p.slots[0].id }])
