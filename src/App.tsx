@@ -8,6 +8,7 @@ import { commit, initialHistory, redo, undo } from './lib/history'
 import { sampleProject } from './lib/sample'
 import { Toolbar } from './components/Toolbar'
 import { SetupPanel } from './components/SetupPanel'
+import { AvailabilityPanel } from './components/AvailabilityPanel'
 import { BoardPanel } from './components/BoardPanel'
 import { useScheduleSolve } from './components/useScheduleSolve'
 import { Button, type UpdateProject } from './components/ui'
@@ -99,6 +100,7 @@ export default function App() {
         </div>
         <div className="flex flex-wrap items-start justify-evenly gap-4">
           <SetupPanel project={project} onChange={updateProject} />
+          <AvailabilityPanel project={project} onChange={updateProject} />
           <BoardPanel key={day} project={project} onChange={updateProject}
             canUndo={history.past.length > 0} canRedo={history.future.length > 0}
             onUndo={() => { setSolveRequest(null); setHistory(undo) }}
