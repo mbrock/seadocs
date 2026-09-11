@@ -23,6 +23,7 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
   const names = useNames(project)
   const rows = participants(project, side)
   const columns = participants(project, otherSide(side))
+  const dmRequestCounts = new Map(project.teams.map((team) => [team.id, project.dms.filter((dm) => project.dmAsks[pairKey(team.id, dm.id)]).length]))
   const scheduled = new Set(project.meetings.map((m) => pairKey(m.team, m.dm)))
   // Reserve roughly one em per character before the 45° rotation, including wide glyphs.
   const longestHeader = Math.max(0, ...columns.map((p) => names(p.id)).map(({ side, name, tag, code }) => Array.from(side === 'team' ? name : `${tag} ${code}`.trim()).length))
@@ -30,6 +31,7 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
 
   return (
     <section className="w-fit max-w-full min-w-0">
+      <p className="text-muted">Film counts = number of DMs requesting that project.</p>
       <div className="overflow-auto pb-1">
         <table style={{ marginRight: headerHeight }} className="w-max border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-paper">
@@ -39,11 +41,12 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
               </th>
               {columns.map((p) => (
                 <th key={p.id} style={{ height: headerHeight }} className="relative w-7 min-w-7 overflow-visible p-0 align-bottom font-normal">
-                  <span className="absolute bottom-3 left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap">
+                  <span className={`absolute ${side === 'dm' ? 'bottom-7' : 'bottom-3'} left-0 inline-flex origin-bottom-left -rotate-45 items-center whitespace-nowrap`}>
                     <span className="inline-flex translate-y-full pl-2">
                       {side === 'dm' ? <span className="italic">{p.name}</span> : <Name who={names(p.id)} variant="code" />}
                     </span>
                   </span>
+                  {side === 'dm' && <span className="block text-center font-mono text-muted" title={`${p.name}: ${dmRequestCounts.get(p.id)} DM requests`} aria-label={`${p.name}: ${dmRequestCounts.get(p.id)} DM requests`}>{dmRequestCounts.get(p.id)}</span>}
                 </th>
               ))}
             </tr>
@@ -56,6 +59,7 @@ function RequestMatrix({ side, project, onChange }: Props & { side: Side }) {
                     who={names(person.id)}
                     variant={side === 'team' ? 'full' : 'short'}
                   />
+                  {side === 'team' && <span className="block text-xs text-muted">{dmRequestCounts.get(person.id)} DM requests</span>}
                 </th>
                 {columns.map((column) => {
                   const pair = pairOf(side, person.id, column.id)

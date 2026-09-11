@@ -3,6 +3,18 @@ import { expect, test } from 'vitest'
 import { emptyProject, withAsk, withMeetings, withParticipants } from '../lib/project'
 import { SetupPanel } from './SetupPanel'
 
+test('film counts include incoming DM requests only and update on removal', () => {
+  let project = withParticipants(emptyProject(), ['Alpha', 'Beta'], ['One', 'Two'])
+  project = withAsk(project, 'dm', project.teams[0].id, project.dms[0].id, true)
+  project = withAsk(project, 'dm', project.teams[0].id, project.dms[1].id, true)
+  project = withAsk(project, 'team', project.teams[1].id, project.dms[0].id, true)
+  const render = () => renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
+  expect(render()).toContain('Alpha: 2 DM requests')
+  expect(render()).toContain('Beta: 0 DM requests')
+  project = withAsk(project, 'dm', project.teams[0].id, project.dms[1].id, false)
+  expect(render()).toContain('Alpha: 1 DM requests')
+})
+
 test('Setup uses separate request matrices with read-only row names', () => {
   const project = withParticipants(emptyProject(), ['Alpha'], ['Fund X'])
   const html = renderToStaticMarkup(<SetupPanel project={project} onChange={() => undefined} />)
